@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code · 通俗易懂入门指南</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #030712;
+  --bg2: #0a0f1e;
+  --bg3: #0d1526;
+  --blue: #3b82f6;
+  --blue-light: #60a5fa;
+  --blue-dim: rgba(59,130,246,0.15);
+  --green: #10b981;
+  --green-dim: rgba(16,185,129,0.12);
+  --yellow: #f59e0b;
+  --yellow-dim: rgba(245,158,11,0.12);
+  --purple: #8b5cf6;
+  --purple-dim: rgba(139,92,246,0.12);
+  --cyan: #06b6d4;
+  --cyan-dim: rgba(6,182,212,0.12);
+  --red: #ef4444;
+  --pink: #ec4899;
+  --border: rgba(59,130,246,0.2);
+  --text: #e2e8f0;
+  --text-dim: #64748b;
+  --text-mid: #94a3b8;
+  --glass: rgba(255,255,255,0.03);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+body::before {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(ellipse 60% 40% at 20% 30%, rgba(59,130,246,.04) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 50% at 80% 60%, rgba(16,185,129,.03) 0%, transparent 60%),
+    linear-gradient(rgba(59,130,246,.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59,130,246,.012) 1px, transparent 1px);
+  background-size: auto, auto, 40px 40px, 40px 40px;
+}
+.page { position:relative; z-index:1; max-width:1100px; margin:0 auto; padding:40px 24px 80px; }
+
+/* ── HEADER ── */
+.header { text-align:center; margin-bottom:60px; }
+.badge {
+  display:inline-flex; align-items:center; gap:8px;
+  padding:5px 16px; border-radius:99px;
+  background:var(--blue-dim); border:1px solid rgba(59,130,246,.4);
+  color:var(--blue-light);
+  font-family:'JetBrains Mono',monospace; font-size:11px;
+  letter-spacing:2px; text-transform:uppercase; margin-bottom:16px;
+}
+.badge .dot { width:7px; height:7px; border-radius:50%; background:var(--blue); animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(59,130,246,.5)} 50%{box-shadow:0 0 0 8px rgba(59,130,246,0)} }
+.header h1 {
+  font-size:clamp(28px,5vw,46px); font-weight:700; line-height:1.15; margin-bottom:14px;
+  background:linear-gradient(135deg, #fff 0%, var(--blue-light) 50%, var(--blue) 100%);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+}
+.header .sub { color:var(--text-mid); font-size:15px; line-height:1.6; max-width:700px; margin:0 auto; }
+
+/* ── SECTION ── */
+.section { margin-bottom:64px; }
+.section-title {
+  font-size:22px; font-weight:700; margin-bottom:8px; display:flex; align-items:center; gap:10px;
+}
+.section-title .icon { font-size:24px; }
+.section-sub { color:var(--text-dim); font-size:13px; font-family:'JetBrains Mono',monospace; margin-bottom:28px; }
+
+/* ── TABS ── */
+.tabs { display:flex; gap:4px; margin-bottom:24px; }
+.tab {
+  padding:10px 24px; border-radius:8px 8px 0 0; cursor:pointer;
+  font-size:14px; font-weight:600;
+  background:var(--glass); border:1px solid var(--border); border-bottom:none;
+  color:var(--text-dim); transition:all .25s;
+}
+.tab:hover { color:var(--text); }
+.tab.active { background:var(--blue-dim); color:var(--blue-light); border-color:rgba(59,130,246,.4); }
+.tab-panel { display:none; }
+.tab-panel.active { display:block; }
+
+.perspective-card {
+  border-radius:0 12px 12px 12px; padding:28px;
+  border:1px solid var(--border); background:var(--glass);
+  backdrop-filter:blur(8px);
+}
+.perspective-card h3 { font-size:18px; margin-bottom:16px; color:var(--blue-light); }
+.perspective-card .analogy {
+  font-size:20px; font-weight:700; line-height:1.5;
+  padding:16px 24px; border-radius:10px; margin-bottom:16px;
+  background:linear-gradient(135deg, rgba(59,130,246,.08), rgba(6,182,212,.06));
+  border-left:3px solid var(--blue);
+}
+.perspective-card ul { list-style:none; }
+.perspective-card li {
+  padding:8px 0; font-size:14px; color:var(--text-mid); border-bottom:1px solid rgba(255,255,255,.04);
+  display:flex; gap:10px; align-items:flex-start;
+}
+.perspective-card li::before { content:''; flex-shrink:0; width:6px; height:6px; border-radius:50%; background:var(--blue); margin-top:7px; }
+
+/* ── JOURNEY ── */
+.journey { display:flex; flex-direction:column; gap:0; }
+.step {
+  display:flex; gap:20px; cursor:pointer; position:relative;
+}
+.step-line {
+  display:flex; flex-direction:column; align-items:center; width:48px; flex-shrink:0;
+}
+.step-dot {
+  width:48px; height:48px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:22px;
+  border:2px solid var(--step-color); background:rgba(0,0,0,.5);
+  transition:all .3s; position:relative; z-index:2;
+}
+.step:hover .step-dot { transform:scale(1.1); box-shadow:0 0 20px var(--step-glow); }
+.step-connector { width:2px; flex:1; min-height:20px; background:var(--step-color); opacity:.3; }
+.step:last-child .step-connector { display:none; }
+.step-content {
+  flex:1; padding:8px 0 32px;
+}
+.step-head { font-size:16px; font-weight:600; margin-bottom:4px; color:var(--step-color); }
+.step-desc { font-size:13px; color:var(--text-mid); line-height:1.6; }
+.step-detail {
+  margin-top:10px; padding:14px 18px; border-radius:10px;
+  background:var(--glass); border:1px solid var(--border);
+  font-size:13px; color:var(--text-mid); line-height:1.7;
+  max-height:0; overflow:hidden; opacity:0; transition:all .4s ease;
+}
+.step.open .step-detail { max-height:300px; opacity:1; }
+.step-hint { font-size:11px; color:var(--text-dim); margin-top:4px; font-style:italic; }
+
+.step--input   { --step-color:var(--blue);   --step-glow:rgba(59,130,246,.3); }
+.step--think   { --step-color:var(--purple); --step-glow:rgba(139,92,246,.3); }
+.step--tool    { --step-color:var(--cyan);   --step-glow:rgba(6,182,212,.3); }
+.step--guard   { --step-color:var(--yellow); --step-glow:rgba(245,158,11,.3); }
+.step--output  { --step-color:var(--green);  --step-glow:rgba(16,185,129,.3); }
+
+/* ── ABILITY CARDS ── */
+.abilities { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px,1fr)); gap:14px; }
+.ability {
+  border-radius:12px; padding:20px 18px;
+  border:1px solid var(--ab-border); background:var(--ab-bg);
+  transition:all .3s; cursor:default; position:relative; overflow:hidden;
+}
+.ability::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--ab-color); }
+.ability:hover { transform:translateY(-3px); box-shadow:0 8px 30px var(--ab-glow); }
+.ability .ab-icon { font-size:28px; margin-bottom:10px; }
+.ability .ab-title { font-size:14px; font-weight:700; margin-bottom:6px; color:var(--ab-color); }
+.ability .ab-desc { font-size:12px; color:var(--text-mid); line-height:1.5; }
+.ability .ab-example {
+  margin-top:10px; padding:8px 12px; border-radius:6px;
+  background:rgba(0,0,0,.3); font-family:'JetBrains Mono',monospace;
+  font-size:11px; color:var(--text-dim); display:none;
+}
+.ability:hover .ab-example { display:block; }
+
+.ab-read    { --ab-color:var(--blue);   --ab-border:rgba(59,130,246,.2);  --ab-bg:rgba(59,130,246,.04);  --ab-glow:rgba(59,130,246,.15); }
+.ab-write   { --ab-color:var(--green);  --ab-border:rgba(16,185,129,.2);  --ab-bg:rgba(16,185,129,.04);  --ab-glow:rgba(16,185,129,.15); }
+.ab-search  { --ab-color:var(--purple); --ab-border:rgba(139,92,246,.2);  --ab-bg:rgba(139,92,246,.04);  --ab-glow:rgba(139,92,246,.15); }
+.ab-web     { --ab-color:var(--cyan);   --ab-border:rgba(6,182,212,.2);   --ab-bg:rgba(6,182,212,.04);   --ab-glow:rgba(6,182,212,.15); }
+.ab-multi   { --ab-color:var(--pink);   --ab-border:rgba(236,72,153,.2);  --ab-bg:rgba(236,72,153,.04);  --ab-glow:rgba(236,72,153,.15); }
+
+/* ── SECURITY VIS ── */
+.gates { display:flex; gap:14px; flex-wrap:wrap; justify-content:center; margin-bottom:20px; }
+.gate {
+  width:200px; border-radius:12px; padding:20px 16px; text-align:center;
+  border:1px solid; transition:all .3s;
+}
+.gate:hover { transform:translateY(-3px); }
+.gate .gate-icon { font-size:36px; margin-bottom:8px; }
+.gate .gate-label { font-size:14px; font-weight:700; margin-bottom:4px; }
+.gate .gate-desc { font-size:12px; color:var(--text-mid); line-height:1.5; }
+.gate--deny   { border-color:rgba(239,68,68,.3);  background:rgba(239,68,68,.05); }
+.gate--deny  .gate-label { color:var(--red); }
+.gate--allow  { border-color:rgba(16,185,129,.3); background:rgba(16,185,129,.05); }
+.gate--allow .gate-label { color:var(--green); }
+.gate--ask    { border-color:rgba(59,130,246,.3); background:rgba(59,130,246,.05); }
+.gate--ask   .gate-label { color:var(--blue); }
+
+.gate-flow {
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-dim);
+  margin-bottom:16px;
+}
+.gate-flow .arrow { color:var(--blue); font-weight:700; }
+
+.security-note {
+  padding:16px 20px; border-radius:10px;
+  background:rgba(16,185,129,.06); border:1px solid rgba(16,185,129,.25);
+  font-size:13px; color:var(--green); text-align:center; line-height:1.6;
+}
+
+/* ── ACCORDION ── */
+.accordion { display:flex; flex-direction:column; gap:4px; }
+.acc-item { border-radius:8px; overflow:hidden; border:1px solid var(--border); }
+.acc-head {
+  padding:14px 18px; cursor:pointer;
+  background:var(--glass); display:flex; justify-content:space-between; align-items:center;
+  font-size:14px; font-weight:600; transition:background .2s;
+}
+.acc-head:hover { background:var(--blue-dim); }
+.acc-head .term { color:var(--blue-light); font-family:'JetBrains Mono',monospace; }
+.acc-head .chevron { color:var(--text-dim); transition:transform .3s; font-size:12px; }
+.acc-item.open .acc-head .chevron { transform:rotate(180deg); }
+.acc-body {
+  max-height:0; overflow:hidden; transition:max-height .35s ease;
+  padding:0 18px; font-size:13px; color:var(--text-mid); line-height:1.6;
+}
+.acc-item.open .acc-body { max-height:200px; padding:10px 18px 16px; }
+
+/* ── ROUTES ── */
+.routes { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)); gap:16px; }
+.route {
+  border-radius:12px; padding:24px 20px;
+  border:1px solid var(--rt-border); background:var(--rt-bg);
+  transition:all .3s; cursor:default;
+}
+.route:hover { transform:translateY(-3px); box-shadow:0 8px 25px var(--rt-glow); }
+.route .rt-badge { font-size:11px; font-weight:700; padding:3px 10px; border-radius:4px; display:inline-block; margin-bottom:10px; color:#fff; background:var(--rt-color); }
+.route h3 { font-size:16px; font-weight:700; margin-bottom:8px; }
+.route .rt-time { font-size:12px; color:var(--text-dim); margin-bottom:10px; font-family:'JetBrains Mono',monospace; }
+.route ul { list-style:none; font-size:13px; color:var(--text-mid); }
+.route li { padding:4px 0; }
+.route li::before { content:'→ '; color:var(--rt-color); font-weight:700; }
+
+.rt-a { --rt-color:var(--green);  --rt-border:rgba(16,185,129,.2); --rt-bg:rgba(16,185,129,.03); --rt-glow:rgba(16,185,129,.12); }
+.rt-b { --rt-color:var(--blue);   --rt-border:rgba(59,130,246,.2); --rt-bg:rgba(59,130,246,.03); --rt-glow:rgba(59,130,246,.12); }
+.rt-c { --rt-color:var(--purple); --rt-border:rgba(139,92,246,.2); --rt-bg:rgba(139,92,246,.03); --rt-glow:rgba(139,92,246,.12); }
+
+/* ── FOOTER ── */
+.footer { text-align:center; margin-top:60px; padding-top:24px; border-top:1px solid var(--border); color:var(--text-dim); font-size:12px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ════════ HEADER ════════ -->
+<div class="header">
+  <div class="badge"><span class="dot"></span> BEGINNER FRIENDLY</div>
+  <h1>Claude Code 通俗易懂入门指南</h1>
+  <p class="sub">零基础也能看懂的 AI 编程工具完全解读<br>面向开发者与业务人员，无需任何前置知识</p>
+</div>
+
+<!-- ════════ S1: PERSPECTIVE TABS ════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">👀</span> 两种视角看 Claude Code</div>
+  <div class="section-sub">选择你的身份，获得最贴切的理解方式</div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(0)">💼 业务人员视角</div>
+    <div class="tab" onclick="switchTab(1)">💻 开发者视角</div>
+  </div>
+  <div id="panel-0" class="tab-panel active">
+    <div class="perspective-card">
+      <div class="analogy">Claude Code = 一位懂技术的全能实习生<br>你只需要说需求，它来动手做</div>
+      <h3>它能帮你做这些事情：</h3>
+      <ul>
+        <li>"帮我分析这份 Excel 数据的趋势" → 自动写脚本、跑分析、出图表</li>
+        <li>"把这份技术文档改写成客户能看懂的" → 读懂原文、去术语、重新组织</li>
+        <li>"搜一下最新的行业政策变化" → 上网搜索、提取关键信息、整理成报告</li>
+        <li>"每天自动把数据同步到数据库" → 设计方案、写自动化脚本、安排定时任务</li>
+      </ul>
+    </div>
+  </div>
+  <div id="panel-1" class="tab-panel">
+    <div class="perspective-card">
+      <div class="analogy">Claude Code = AI 推理 + 真实世界执行管道<br>不是聊天框，是完整的 Harness 工程体系</div>
+      <h3>核心技术价值：</h3>
+      <ul>
+        <li>45+ 内置工具：Read / Write / Edit / Bash / Grep / Glob / WebSearch ...</li>
+        <li>QueryLoop 循环：API 调用 → 工具执行 → 结果返回 → 再调用，直到 end_turn</li>
+        <li>5 种权限模式：从 plan（只读）到 bypassPermissions（最高权限）</li>
+        <li>Coordinator/Worker 多 Agent 架构：复杂任务自动拆分并行</li>
+        <li>MCP 协议扩展：接入任意外部服务器和自定义工具</li>
+        <li>Prompt Cache 优化：相同项目目录下缓存命中率 60-95%，成本降低 40-60%</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ S2: JOURNEY ════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">🚀</span> 一次对话的完整旅程</div>
+  <div class="section-sub">点击任意步骤查看详细说明</div>
+  <div class="journey">
+
+    <div class="step step--input" onclick="toggleStep(this)">
+      <div class="step-line"><div class="step-dot">⌨️</div><div class="step-connector"></div></div>
+      <div class="step-content">
+        <div class="step-head">第一步：你输入一句话</div>
+        <div class="step-desc">在终端里用自然语言描述你的需求</div>
+        <div class="step-hint">（点击展开详情）</div>
+        <div class="step-detail">
+          例如："帮我找出项目中所有没写测试的函数，列成 TODO 清单。"<br><br>
+          Claude Code 接收你的文字后，会把它包装成一条消息发给 Claude AI 模型。这条消息不仅包含你说的话，还自动附带了项目信息（来自 CLAUDE.md）、环境信息（操作系统、当前目录）和你的历史偏好。
+        </div>
+      </div>
+    </div>
+
+    <div class="step step--think" onclick="toggleStep(this)">
+      <div class="step-line"><div class="step-dot">🧠</div><div class="step-connector"></div></div>
+      <div class="step-content">
+        <div class="step-head">第二步：AI 理解并拆解任务</div>
+        <div class="step-desc">Claude 分析你的意图，制定行动计划</div>
+        <div class="step-hint">（点击展开详情）</div>
+        <div class="step-detail">
+          Claude 不会直接给你一个"答案"——它会思考："要完成这个任务，我需要做什么？"<br><br>
+          比如分析出需要：1) 先搜索所有代码文件 → 2) 找出函数定义 → 3) 对比测试文件 → 4) 创建 TODO.md。<br><br>
+          这个"思考"过程在 Claude 内部完成，你会看到它开始一步步采取行动。
+        </div>
+      </div>
+    </div>
+
+    <div class="step step--tool" onclick="toggleStep(this)">
+      <div class="step-line"><div class="step-dot">🔧</div><div class="step-connector"></div></div>
+      <div class="step-content">
+        <div class="step-head">第三步：选择并使用工具</div>
+        <div class="step-desc">从 45+ 个工具中选择合适的，真正动手操作</div>
+        <div class="step-hint">（点击展开详情）</div>
+        <div class="step-detail">
+          Claude 会调用具体的工具来执行操作：<br>
+          • <strong>Glob</strong> — 按文件名模式搜索（如 "找所有 .ts 文件"）<br>
+          • <strong>Grep</strong> — 在代码中全文搜索关键词<br>
+          • <strong>Read</strong> — 打开并阅读文件内容<br>
+          • <strong>Write</strong> — 创建新文件<br>
+          • <strong>Bash</strong> — 运行命令行命令<br><br>
+          只读工具（如 Read、Grep）可以并行执行，提高效率；<br>
+          写入工具（如 Write、Edit）必须串行执行，确保安全。
+        </div>
+      </div>
+    </div>
+
+    <div class="step step--guard" onclick="toggleStep(this)">
+      <div class="step-line"><div class="step-dot">🛡️</div><div class="step-connector"></div></div>
+      <div class="step-content">
+        <div class="step-head">第四步：安全检查</div>
+        <div class="step-desc">每个操作都要过"门卫"审核——特别是写入和执行类操作</div>
+        <div class="step-hint">（点击展开详情）</div>
+        <div class="step-detail">
+          在执行任何可能修改你文件或系统的操作前，权限系统会进行检查：<br><br>
+          1️⃣ 首先看有没有<strong>禁止规则</strong>（比如"不许删除 node_modules"）→ 有就直接拦截<br>
+          2️⃣ 再看有没有<strong>允许规则</strong>（比如"允许编辑 src/ 目录"）→ 有就自动通过<br>
+          3️⃣ 都没有 → <strong>弹窗问你</strong>："Claude 想创建文件 TODO.md，允许吗？"<br><br>
+          你可以选择：允许这一次 / 始终允许此类操作 / 拒绝。
+        </div>
+      </div>
+    </div>
+
+    <div class="step step--output" onclick="toggleStep(this)">
+      <div class="step-line"><div class="step-dot">✅</div><div class="step-connector"></div></div>
+      <div class="step-content">
+        <div class="step-head">第五步：执行完毕，返回结果</div>
+        <div class="step-desc">循环结束，Claude 将结果呈现给你</div>
+        <div class="step-hint">（点击展开详情）</div>
+        <div class="step-detail">
+          当 Claude 判断任务已完成时，QueryLoop 退出循环，将最终结果展示给你。<br><br>
+          如果任务还没做完（比如搜索完了还没写文件），它会自动回到第二步继续思考下一步操作。<br><br>
+          这就是 QueryLoop 的精髓：<strong>思考 → 动手 → 思考 → 动手</strong>，循环往复直到任务完成或预算用完。
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════ S3: FIVE ABILITIES ════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">⚡</span> 五大核心能力</div>
+  <div class="section-sub">hover 查看每种能力的具体示例</div>
+  <div class="abilities">
+
+    <div class="ability ab-read">
+      <div class="ab-icon">📖</div>
+      <div class="ab-title">读取理解</div>
+      <div class="ab-desc">阅读代码、文档、图片、PDF，理解项目结构和上下文</div>
+      <div class="ab-example">> "帮我看一下 auth.ts 是怎么处理 token 刷新的"</div>
+    </div>
+
+    <div class="ability ab-write">
+      <div class="ab-icon">✏️</div>
+      <div class="ab-title">编写修改</div>
+      <div class="ab-desc">创建新文件、编辑现有代码、精确修改指定位置</div>
+      <div class="ab-example">> "把 getUserInfo 函数里的 callback 改成 async/await"</div>
+    </div>
+
+    <div class="ability ab-search">
+      <div class="ab-icon">🔍</div>
+      <div class="ab-title">搜索定位</div>
+      <div class="ab-desc">在代码库中全文搜索、按文件名查找、追溯依赖关系</div>
+      <div class="ab-example">> "找出所有使用了 deprecated API 的地方"</div>
+    </div>
+
+    <div class="ability ab-web">
+      <div class="ab-icon">🌐</div>
+      <div class="ab-title">联网查询</div>
+      <div class="ab-desc">搜索互联网、获取网页内容、查找最新文档和资讯</div>
+      <div class="ab-example">> "React 19 的新 Hooks API 有哪些变化？"</div>
+    </div>
+
+    <div class="ability ab-multi">
+      <div class="ab-icon">👥</div>
+      <div class="ab-title">多任务协调</div>
+      <div class="ab-desc">拆分复杂任务给多个 Worker 并行执行，效率翻倍</div>
+      <div class="ab-example">> "重构认证模块，同时更新所有相关测试和文档"</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════ S4: SECURITY ════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">🔒</span> 安全感：三道门</div>
+  <div class="section-sub">每个操作都要过这三道安全检查，顺序判断，不可跳过</div>
+
+  <div class="gate-flow">
+    操作请求 <span class="arrow">→</span> 禁止规则? <span class="arrow">→</span> 允许规则? <span class="arrow">→</span> 问你 <span class="arrow">→</span> 执行/拒绝
+  </div>
+
+  <div class="gates">
+    <div class="gate gate--deny">
+      <div class="gate-icon">🚫</div>
+      <div class="gate-label">第一道：禁止规则</div>
+      <div class="gate-desc">命中 Deny 规则 → 直接拦截<br>无论如何不会执行<br>例如：禁止删除 .env 文件</div>
+    </div>
+    <div class="gate gate--allow">
+      <div class="gate-icon">✅</div>
+      <div class="gate-label">第二道：允许规则</div>
+      <div class="gate-desc">命中 Allow 规则 → 自动通过<br>不打扰你<br>例如：允许读取 src/ 目录</div>
+    </div>
+    <div class="gate gate--ask">
+      <div class="gate-icon">🙋</div>
+      <div class="gate-label">第三道：问你</div>
+      <div class="gate-desc">两条规则都没命中<br>→ 弹窗让你做决定<br>"允许 / 始终允许 / 拒绝"</div>
+    </div>
+  </div>
+
+  <div class="security-note">
+    核心承诺：Claude Code 永远不会偷偷做危险操作——要么你事先允许了，要么它会先问你。
+  </div>
+</div>
+
+<!-- ════════ S5: GLOSSARY ════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">📚</span> 术语速查</div>
+  <div class="section-sub">点击展开，一句话搞懂每个术语</div>
+  <div class="accordion" id="glossary"></div>
+</div>
+
+<!-- ════════ S6: ROUTES ════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">🗺️</span> 下一步读什么</div>
+  <div class="section-sub">根据你的时间和兴趣选择阅读路线</div>
+  <div class="routes">
+
+    <div class="route rt-a">
+      <span class="rt-badge">路径 A</span>
+      <h3>快速建立画面</h3>
+      <div class="rt-time">⏱ 30 分钟</div>
+      <ul>
+        <li><a href="00_机器全景图.html" style="color:inherit">机器全景图</a> — 四层架构鸟瞰</li>
+        <li><a href="01_请求生命周期.html" style="color:inherit">请求生命周期</a> — 一次完整交互</li>
+        <li>浏览笔记 00 确认理解</li>
+      </ul>
+    </div>
+
+    <div class="route rt-b">
+      <span class="rt-badge">路径 B</span>
+      <h3>系统精读</h3>
+      <div class="rt-time">⏱ 每章 30-60 分钟</div>
+      <ul>
+        <li>按顺序：00 → 00b → 01 → 02 → 04</li>
+        <li>然后：03 → 06 → 05 → 07 → 08</li>
+        <li>每章笔记 + 对应图交替阅读</li>
+      </ul>
+    </div>
+
+    <div class="route rt-c">
+      <span class="rt-badge">路径 C</span>
+      <h3>按需查阅</h3>
+      <div class="rt-time">⏱ 按需</div>
+      <ul>
+        <li>权限安全 → 笔记 02</li>
+        <li>工具并发 → 笔记 04</li>
+        <li>Token 优化 → 笔记 03 + 06</li>
+        <li>自定义扩展 → 笔记 07 + 08</li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+
+<div class="footer">
+  Claude Code 精密拆解系列 · 通俗易懂入门指南 · 2026
+</div>
+
+</div><!-- .page -->
+
+<script>
+/* ── Tab switching ── */
+function switchTab(idx) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', i===idx));
+  document.querySelectorAll('.tab-panel').forEach((p,i) => p.classList.toggle('active', i===idx));
+}
+
+/* ── Journey step toggle ── */
+function toggleStep(el) {
+  el.classList.toggle('open');
+}
+
+/* ── Accordion ── */
+const glossaryData = [
+  ["Harness", "把 AI 的"思考能力"变成"做事能力"的整套工程系统——方向盘、油门、刹车，让引擎能上路"],
+  ["QueryLoop", ""思考→动手→再思考"的核心循环，Claude Code 的心跳，持续运转直到任务完成"],
+  ["QueryEngine", "整个 Claude Code 的中枢调度器，一个进程里只有一个，管理会话的全部生命周期"],
+  ["Tool（工具）", "Claude 用来操作真实世界的"手"——Read 读文件、Edit 改代码、Bash 跑命令、Grep 搜内容"],
+  ["stop_reason", "循环控制信号：end_turn = 任务完成停下来；tool_use = 还需要继续使用工具"],
+  ["Permission Mode", "安全模式——从"什么都问"（default）到"什么都不问"（bypassPermissions）的五档"],
+  ["CLAUDE.md", "项目级指令文件：写在项目根目录，告诉 Claude 这个项目的规矩、偏好和约定"],
+  ["Memory / MEMORY.md", "跨会话记忆文件：记住你的个人偏好和习惯，下次开新会话依然有效"],
+  ["Prompt Cache", "把重复的指令缓存起来，下次不用重新算——同一项目下命中率可达 60-95%，省钱利器"],
+  ["autoCompact", "对话用量达到 70% 上下文窗口时，自动调用 AI 生成摘要来释放空间，防止"记忆溢出""],
+  ["Context Window", "AI 一次能"看到"的全部内容上限，Claude 约 200K Token（相当于 40 万字）"],
+  ["Token", "AI 处理文本的最小单位：1 Token ≈ 0.75 个英文单词 ≈ 0.5 个汉字"],
+  ["StreamingToolExecutor", "工具并发执行引擎——只读工具可以同时跑多个，写入工具必须排队"],
+  ["Coordinator / Worker", "多 Agent 协作模式——一个"项目经理"拆解任务，多个"工人"并行执行"],
+  ["MCP", "Model Context Protocol：让 Claude 连接外部服务器和工具的标准协议，无限扩展能力"],
+  ["Hooks", "事件钩子：在工具执行前/后自动运行你的脚本——比如每次写文件前自动跑 lint"],
+  ["Skills", "可复用任务模板：把"分析新闻情感"这样的复杂工作流打包成 /news-analyzer 一条命令"],
+  ["Platt Scaling", "校准 AI 输出的"置信度"——AI 往往过度自信，需要统计方法把分数拉回真实水平"],
+  ["IC (Information Coefficient)", "衡量预测因子和真实结果相关性的指标：越接近 1 越好，>0.05 就算有用"],
+  ["NSIF", "Net Sentiment Intensity Factor：方向 × 强度 × 置信度 × 来源权重 × 时间衰减，舆情量化因子"],
+];
+
+const glossaryEl = document.getElementById('glossary');
+glossaryData.forEach(([term, desc]) => {
+  const item = document.createElement('div');
+  item.className = 'acc-item';
+  item.innerHTML = `
+    <div class="acc-head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="term">${term}</span>
+      <span class="chevron">▼</span>
+    </div>
+    <div class="acc-body">${desc}</div>
+  `;
+  glossaryEl.appendChild(item);
+});
+</script>
+</body>
+</html>
