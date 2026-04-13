@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code — 启动与初始化序列</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #030712;
+    --bg2: #0a0f1e;
+    --bg3: #0d1526;
+    --blue: #3b82f6;
+    --blue-light: #60a5fa;
+    --blue-dim: rgba(59,130,246,0.15);
+    --green: #10b981;
+    --green-dim: rgba(16,185,129,0.12);
+    --yellow: #f59e0b;
+    --yellow-dim: rgba(245,158,11,0.12);
+    --purple: #8b5cf6;
+    --purple-dim: rgba(139,92,246,0.12);
+    --cyan: #06b6d4;
+    --cyan-dim: rgba(6,182,212,0.12);
+    --red: #ef4444;
+    --border: rgba(59,130,246,0.2);
+    --text: #e2e8f0;
+    --text-dim: #64748b;
+    --text-mid: #94a3b8;
+    --glass: rgba(255,255,255,0.03);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    min-height: 100vh;
+    padding: 40px 24px 80px;
+    overflow-x: hidden;
+  }
+
+  /* ── header ── */
+  .header {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+  .header .badge {
+    display: inline-block;
+    padding: 4px 14px;
+    border-radius: 99px;
+    background: var(--blue-dim);
+    border: 1px solid var(--blue);
+    color: var(--blue-light);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .header h1 {
+    font-size: clamp(24px, 4vw, 40px);
+    font-weight: 700;
+    background: linear-gradient(135deg, #fff 0%, var(--blue-light) 60%, var(--blue) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.2;
+    margin-bottom: 12px;
+  }
+  .header p {
+    color: var(--text-mid);
+    font-size: 14px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── main layout ── */
+  .layout {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 32px;
+    align-items: start;
+  }
+  @media (max-width: 768px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+  }
+
+  /* ── sidebar nav ── */
+  .sidebar {
+    position: sticky;
+    top: 24px;
+  }
+  .sidebar-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    padding-left: 12px;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 4px;
+    border: 1px solid transparent;
+  }
+  .nav-item:hover {
+    background: var(--glass);
+    border-color: var(--border);
+  }
+  .nav-item.active {
+    background: var(--blue-dim);
+    border-color: var(--blue);
+  }
+  .nav-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--blue);
+    min-width: 20px;
+  }
+  .nav-label {
+    font-size: 12px;
+    color: var(--text-mid);
+  }
+  .nav-item.active .nav-label {
+    color: var(--blue-light);
+  }
+
+  /* ── phases ── */
+  .phase {
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: var(--glass);
+    backdrop-filter: blur(12px);
+    overflow: hidden;
+    margin-bottom: 16px;
+    transition: all 0.3s;
+  }
+  .phase:hover {
+    border-color: rgba(59,130,246,0.4);
+    box-shadow: 0 0 24px rgba(59,130,246,0.08);
+  }
+  .phase-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 24px;
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+  }
+  .phase-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--bg);
+    background: var(--blue);
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .phase-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    flex: 1;
+  }
+  .phase-subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-left: auto;
+    padding-right: 12px;
+  }
+  .phase-arrow {
+    color: var(--text-dim);
+    font-size: 12px;
+    transition: transform 0.3s;
+  }
+  .phase.open .phase-arrow {
+    transform: rotate(180deg);
+  }
+  .phase-body {
+    display: none;
+    padding: 0 24px 24px;
+    border-top: 1px solid var(--border);
+  }
+  .phase.open .phase-body {
+    display: block;
+  }
+
+  /* phase color variants */
+  .phase-1 .phase-num { background: var(--yellow); }
+  .phase-1:hover { border-color: rgba(245,158,11,0.4); }
+  .phase-1.open { border-color: rgba(245,158,11,0.35); }
+  .phase-2 .phase-num { background: var(--green); }
+  .phase-2:hover { border-color: rgba(16,185,129,0.4); }
+  .phase-2.open { border-color: rgba(16,185,129,0.35); }
+  .phase-3 .phase-num { background: var(--purple); }
+  .phase-3:hover { border-color: rgba(139,92,246,0.4); }
+  .phase-3.open { border-color: rgba(139,92,246,0.35); }
+  .phase-4 .phase-num { background: var(--cyan); }
+  .phase-4:hover { border-color: rgba(6,182,212,0.4); }
+  .phase-4.open { border-color: rgba(6,182,212,0.35); }
+  .phase-5 .phase-num { background: var(--blue); }
+  .phase-6 .phase-num { background: #e879f9; }
+  .phase-6:hover { border-color: rgba(232,121,249,0.4); }
+  .phase-6.open { border-color: rgba(232,121,249,0.35); }
+  .phase-7 .phase-num { background: var(--green); }
+
+  /* ── content blocks ── */
+  .section-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin: 20px 0 10px;
+  }
+  pre {
+    background: #060c1a;
+    border: 1px solid rgba(59,130,246,0.15);
+    border-radius: 10px;
+    padding: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: #a5b4fc;
+    overflow-x: auto;
+    margin: 12px 0;
+  }
+  .kw  { color: #f472b6; }
+  .str { color: #86efac; }
+  .cm  { color: #475569; font-style: italic; }
+  .num { color: #fb923c; }
+  .fn  { color: #60a5fa; }
+
+  .grid2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 12px 0;
+  }
+  @media (max-width: 600px) {
+    .grid2 { grid-template-columns: 1fr; }
+  }
+  .card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .card-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--blue-light);
+    margin-bottom: 8px;
+  }
+  .card p, .card li {
+    font-size: 12px;
+    color: var(--text-mid);
+    line-height: 1.6;
+    margin-bottom: 4px;
+  }
+  .card ul { padding-left: 14px; }
+
+  .tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0;
+  }
+  .tag {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+  .tag-blue   { background: var(--blue-dim); color: var(--blue-light); border: 1px solid var(--blue); }
+  .tag-green  { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); }
+  .tag-yellow { background: var(--yellow-dim); color: var(--yellow); border: 1px solid var(--yellow); }
+  .tag-purple { background: var(--purple-dim); color: var(--purple); border: 1px solid var(--purple); }
+  .tag-cyan   { background: var(--cyan-dim); color: var(--cyan); border: 1px solid var(--cyan); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin: 12px 0;
+  }
+  th {
+    background: var(--bg3);
+    color: var(--blue-light);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 8px 12px;
+    color: var(--text-mid);
+    border-bottom: 1px solid rgba(59,130,246,0.07);
+    vertical-align: top;
+    line-height: 1.5;
+  }
+  td code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: var(--bg3);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--blue-light);
+  }
+
+  /* ── overview flow ── */
+  .overview {
+    max-width: 1080px;
+    margin: 0 auto 32px;
+  }
+  .flow-bar {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    flex-wrap: nowrap;
+  }
+  .flow-step {
+    flex: 1;
+    min-width: 0;
+    padding: 14px 10px;
+    text-align: center;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .flow-step + .flow-step::before {
+    content: '›';
+    position: absolute;
+    left: -1px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-dim);
+    font-size: 16px;
+  }
+  .flow-step:hover { background: var(--glass); }
+  .flow-step.active { background: var(--blue-dim); }
+  .flow-n {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .flow-label {
+    font-size: 11px;
+    color: var(--text-mid);
+    line-height: 1.3;
+  }
+
+  /* ── insight box ── */
+  .insight {
+    background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.06));
+    border: 1px solid rgba(139,92,246,0.25);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin: 16px 0;
+    font-size: 13px;
+    color: var(--text-mid);
+    line-height: 1.7;
+  }
+  .insight strong { color: #c084fc; }
+
+  /* ── animated connector ── */
+  .connector {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 18px;
+    margin: 4px 0;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="badge">Phase 00b · Initialization</div>
+  <h1>启动与初始化序列</h1>
+  <p>claude [options] → Config → Context → Extensions → QueryEngine → QueryLoop</p>
+</div>
+
+<!-- overview flow bar -->
+<div class="overview">
+  <div class="flow-bar">
+    <div class="flow-step active" onclick="activateFlow(this,0)">
+      <div class="flow-n" style="color:#f59e0b">P1</div>
+      <div class="flow-label">配置加载</div>
+    </div>
+    <div class="flow-step" onclick="activateFlow(this,1)">
+      <div class="flow-n" style="color:#10b981">P2</div>
+      <div class="flow-label">上下文发现</div>
+    </div>
+    <div class="flow-step" onclick="activateFlow(this,2)">
+      <div class="flow-n" style="color:#8b5cf6">P3</div>
+      <div class="flow-label">扩展初始化</div>
+    </div>
+    <div class="flow-step" onclick="activateFlow(this,3)">
+      <div class="flow-n" style="color:#06b6d4">P4</div>
+      <div class="flow-label">工具注册</div>
+    </div>
+    <div class="flow-step" onclick="activateFlow(this,4)">
+      <div class="flow-n" style="color:#3b82f6">P5</div>
+      <div class="flow-label">引擎实例化</div>
+    </div>
+    <div class="flow-step" onclick="activateFlow(this,5)">
+      <div class="flow-n" style="color:#e879f9">P6</div>
+      <div class="flow-label">提示组装</div>
+    </div>
+    <div class="flow-step" onclick="activateFlow(this,6)">
+      <div class="flow-n" style="color:#10b981">P7</div>
+      <div class="flow-label">会话启动</div>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-title">Phase 导航</div>
+    <div class="nav-item active" onclick="scrollTo('p1')"><span class="nav-num">P1</span><span class="nav-label">配置加载</span></div>
+    <div class="nav-item" onclick="scrollTo('p2')"><span class="nav-num">P2</span><span class="nav-label">上下文发现</span></div>
+    <div class="nav-item" onclick="scrollTo('p3')"><span class="nav-num">P3</span><span class="nav-label">扩展初始化</span></div>
+    <div class="nav-item" onclick="scrollTo('p4')"><span class="nav-num">P4</span><span class="nav-label">工具注册</span></div>
+    <div class="nav-item" onclick="scrollTo('p5')"><span class="nav-num">P5</span><span class="nav-label">引擎实例化</span></div>
+    <div class="nav-item" onclick="scrollTo('p6')"><span class="nav-num">P6</span><span class="nav-label">提示组装</span></div>
+    <div class="nav-item" onclick="scrollTo('p7')"><span class="nav-num">P7</span><span class="nav-label">会话启动</span></div>
+  </nav>
+
+  <!-- main content -->
+  <div>
+
+    <!-- P1 -->
+    <div id="p1" class="phase phase-1 open">
+      <div class="phase-header" onclick="togglePhase(this)">
+        <div class="phase-num">1</div>
+        <div class="phase-title">配置加载 — 三层覆盖模型</div>
+        <div class="phase-subtitle">settings.json</div>
+        <div class="phase-arrow">▾</div>
+      </div>
+      <div class="phase-body">
+        <div class="section-title">优先级（低 → 高）</div>
+        <pre>~/.claude/settings.json        <span class="cm">← 全局配置，所有项目共享</span>
+    ↑ 被覆盖
+.claude/settings.local.json    <span class="cm">← 项目本地，不提交 git</span>
+    ↑ 被覆盖
+CLI flags + 环境变量            <span class="cm">← 本次运行，最高优先级</span></pre>
+
+        <div class="section-title">检测关键维度</div>
+        <table>
+          <tr><th>维度</th><th>检测方式</th><th>影响</th></tr>
+          <tr><td>交互模式</td><td><code>process.stdin.isTTY</code></td><td>是否显示 TUI / 等待输入</td></tr>
+          <tr><td>Coordinator 模式</td><td><code>CLAUDE_CODE_COORDINATOR_MODE</code></td><td>激活 Worker 接收模式</td></tr>
+        </table>
+
+        <div class="section-title">settings.json 核心字段</div>
+        <pre><span class="kw">interface</span> <span class="fn">ClaudeSettings</span> {
+  model?:       <span class="str">string</span>          <span class="cm">// 默认模型</span>
+  permissions:  {
+    allow: <span class="str">string</span>[]           <span class="cm">// 工具允许规则（glob）</span>
+    deny:  <span class="str">string</span>[]           <span class="cm">// 工具拒绝规则（glob）</span>
+  }
+  hooks?:       Record&lt;<span class="str">string</span>, HookConfig[]&gt;
+  mcpServers?:  Record&lt;<span class="str">string</span>, MCPServerConfig&gt;
+  env?:         Record&lt;<span class="str">string</span>, <span class="str">string</span>&gt;  <span class="cm">// 注入子进程的环境变量</span>
+}</pre>
+      </div>
+    </div>
+
+    <div class="connector">↓</div>
+
+    <!-- P2 -->
+    <div id="p2" class="phase phase-2">
+      <div class="phase-header" onclick="togglePhase(this)">
+        <div class="phase-num">2</div>
+        <div class="phase-title">项目上下文发现</div>
+        <div class="phase-subtitle">CLAUDE.md + Memory</div>
+        <div class="phase-arrow">▾</div>
+      </div>
+      <div class="phase-body">
+        <div class="section-title">Git Root 检测</div>
+        <pre>git rev-parse --show-toplevel
+  ├── 成功 → 使用 git root 作为有效 cwd  <span class="cm">← 项目感知上下文</span>
+  └── 失败 → 使用当前目录</pre>
+
+        <div class="section-title">CLAUDE.md 链式加载（逐级向上）</div>
+        <pre>/project/src/components/   CLAUDE.md?  → <span class="fn">加载</span>，继续向上
+/project/src/              CLAUDE.md?  → <span class="fn">加载</span>，继续向上
+/project/                  CLAUDE.md?  → <span class="fn">加载</span>（项目根）
+~/.claude/                 CLAUDE.md   → <span class="fn">加载</span>（全局 fallback）
+
+<span class="cm">子目录规则优先，内容按"子 → 父"顺序合并</span>
+<span class="cm">@file 引用在加载时递归展开</span></pre>
+
+        <div class="grid2">
+          <div class="card">
+            <div class="card-title">Memory 文件加载</div>
+            <ul>
+              <li>~/.claude/memory/MEMORY.md（全局）</li>
+              <li>.claude/memory/MEMORY.md（项目级）</li>
+              <li>嵌套 @attachment 递归加载</li>
+              <li>硬限制：≤ 200行 / 25KB</li>
+            </ul>
+          </div>
+          <div class="card">
+            <div class="card-title">@file 内联导入</div>
+            <ul>
+              <li>CLAUDE.md 可引用任意文件</li>
+              <li>启动时递归展开</li>
+              <li>支持相对路径</li>
+              <li>常用于拆分大型项目文档</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector">↓</div>
+
+    <!-- P3 -->
+    <div id="p3" class="phase phase-3">
+      <div class="phase-header" onclick="togglePhase(this)">
+        <div class="phase-num">3</div>
+        <div class="phase-title">扩展初始化</div>
+        <div class="phase-subtitle">Skills · MCP · Hooks</div>
+        <div class="phase-arrow">▾</div>
+      </div>
+      <div class="phase-body">
+        <div class="section-title">Skill 元数据预缓存（懒加载设计）</div>
+        <pre><span class="fn">loadAllPluginsCacheOnly</span>()
+  <span class="cm">// 仅建立元数据索引，不加载 Skill 内容</span>
+  ├── ~/.claude/skills/          <span class="cm">← 全局用户 Skills</span>
+  ├── .claude/skills/            <span class="cm">← 项目级 Skills</span>
+  └── 内置 Skills                <span class="cm">← 打包进二进制</span>
+
+  <span class="cm">→ 结果：Map&lt;skillName, SkillMetadata&gt;</span>
+  <span class="cm">→ Skill 内容在匹配到任务时才懒加载（避免 Context 膨胀）</span></pre>
+
+        <div class="section-title">MCP 服务器连接</div>
+        <pre>读取 mcpServers 配置
+  │
+  ├── transport: <span class="str">"stdio"</span>
+  │     → <span class="fn">spawn</span> 子进程 → stdin/stdout JSON-RPC 通道
+  │
+  ├── transport: <span class="str">"sse"</span> / <span class="str">"http"</span>
+  │     → HTTP 长连接 / Server-Sent Events
+  │
+  └── transport: <span class="str">"ws"</span>
+        → WebSocket 双向通道
+
+<span class="cm">每台服务器建连后执行能力协商：</span>
+  GET tools/list     → 获取工具列表
+  GET resources/list → 获取可读资源列表
+
+<span class="cm">连接失败 → warn + skip，不中断启动</span></pre>
+
+        <div class="insight">
+          <strong>关键设计</strong>：MCP 连接失败是非致命的。工具不可用不应阻断整个会话——这保证了即使外部服务宕机，Claude Code 本身仍然可用。
+        </div>
+      </div>
+    </div>
+
+    <div class="connector">↓</div>
+
+    <!-- P4 -->
+    <div id="p4" class="phase phase-4">
+      <div class="phase-header" onclick="togglePhase(this)">
+        <div class="phase-num">4</div>
+        <div class="phase-title">工具注册表组装</div>
+        <div class="phase-subtitle">45+ native + MCP dynamic</div>
+        <div class="phase-arrow">▾</div>
+      </div>
+      <div class="phase-body">
+        <pre>tools[] = [
+  ...nativeTools,   <span class="cm">// ~45 内置工具（编译进二进制）</span>
+  ...mcpTools,      <span class="cm">// 来自 MCP 服务器（0~N，动态）</span>
+]
+
+<span class="cm">// Skill 工具此时 NOT 在 tools[] 中</span>
+<span class="cm">// 由 getSlashCommandToolSkills() 在匹配斜杠命令时按需注入</span></pre>
+
+        <div class="tag-row">
+          <span class="tag tag-cyan">Read / Write / Edit</span>
+          <span class="tag tag-cyan">Bash / Glob / Grep</span>
+          <span class="tag tag-cyan">WebFetch / WebSearch</span>
+          <span class="tag tag-cyan">Agent / TodoWrite</span>
+          <span class="tag tag-blue">+ MCP 动态工具</span>
+        </div>
+
+        <div class="section-title">去重规则</div>
+        <div class="card">
+          <p>MCP 工具名称与 native 工具冲突时，<strong style="color:var(--blue-light)">native 优先</strong>（可通过配置覆盖）。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector">↓</div>
+
+    <!-- P5 -->
+    <div id="p5" class="phase phase-5">
+      <div class="phase-header" onclick="togglePhase(this)">
+        <div class="phase-num">5</div>
+        <div class="phase-title">QueryEngine 实例化</div>
+        <div class="phase-subtitle">会话级单例</div>
+        <div class="phase-arrow">▾</div>
+      </div>
+      <div class="phase-body">
+        <pre><span class="kw">const</span> config: <span class="fn">QueryEngineConfig</span> = {
+  tools,                    <span class="cm">// Phase 4 的 tools[]</span>
+  commands,                 <span class="cm">// 斜杠命令列表</span>
+  mcpClients,               <span class="cm">// Phase 3 的 MCP 连接池</span>
+  <span class="fn">canUseTool</span>,               <span class="cm">// 权限决策函数（见笔记 02）</span>
+  taskBudget: <span class="kw">new</span> <span class="fn">BudgetTracker</span>({
+    maxUsd:    flags.maxBudget,    <span class="cm">// --max-budget</span>
+    maxTokens: <span class="num">200_000</span>,
+  }),
+  thinkingConfig: <span class="fn">resolveThinkingMode</span>(flags.thinking),
+  <span class="cm">// ...20+ 字段</span>
+}
+
+<span class="kw">const</span> engine = <span class="kw">new</span> <span class="fn">QueryEngine</span>(config)
+<span class="cm">// 进程级单例：整个会话只有一个 QueryEngine</span></pre>
+
+        <div class="insight">
+          <strong>单例设计</strong>：QueryEngine 是整个进程的状态中枢。单例保证状态一致性，避免并发竞争——这是 Claude Code 有状态会话的基础。
+        </div>
+      </div>
+    </div>
+
+    <div class="connector">↓</div>
+
+    <!-- P6 -->
+    <div id="p6" class="phase phase-6">
+      <div class="phase-header" onclick="togglePhase(this)">
+        <div class="phase-num">6</div>
+        <div class="phase-title">初始系统提示组装</div>
+        <div class="phase-subtitle">3路并行 + Cache预热</div>
+        <div class="phase-arrow">▾</div>
+      </div>
+      <div class="phase-body">
+        <div class="section-title">buildSystemInitMessage() — 会话元数据</div>
+        <pre><span class="cm">首条 system 消息写入：</span>
+  - 当前日期时间
+  - OS + shell 信息
+  - 有效 cwd（git root）
+  - git 状态摘要（分支 + uncommitted changes）
+  - 使用的模型名称</pre>
+
+        <div class="section-title">fetchSystemPromptParts() — 三路并行</div>
+        <pre><span class="fn">Promise.all</span>([
+  <span class="fn">buildSystemPrompt</span>(),   <span class="cm">← 核心人格 + 工具描述 + 安全规则（静态）</span>
+  <span class="fn">buildUserContext</span>(),    <span class="cm">← CLAUDE.md + Memory + 用户偏好（半静态）</span>
+  <span class="fn">buildSystemContext</span>(),  <span class="cm">← 环境信息 + Hooks 指引 + 可用命令（动态）</span>
+])
+<span class="cm">→ 三路合并 → 最终 system prompt blocks[]</span></pre>
+
+        <div class="section-title">Prompt Cache 预热</div>
+        <pre>cache_control: { type: <span class="str">"ephemeral"</span> } 标记稳定块：
+  ├── 系统提示核心    <span class="cm">命中率 60-95%</span>
+  └── CLAUDE.md 内容  <span class="cm">命中率 80%+</span>
+
+<span class="cm">首次请求建立缓存 → 后续命中 → Token 成本降低 40-60%</span></pre>
+      </div>
+    </div>
+
+    <div class="connector">↓</div>
+
+    <!-- P7 -->
+    <div id="p7" class="phase phase-7">
+      <div class="phase-header" onclick="togglePhase(this)">
+        <div class="phase-num">7</div>
+        <div class="phase-title">会话启动</div>
+        <div class="phase-subtitle">Interactive / Non-Interactive</div>
+        <div class="phase-arrow">▾</div>
+      </div>
+      <div class="phase-body">
+        <div class="grid2">
+          <div class="card">
+            <div class="card-title" style="color:var(--green)">Interactive Mode</div>
+            <ul>
+              <li>打印欢迎信息（模型名、cwd）</li>
+              <li>加载对话历史（--continue）</li>
+              <li>显示输入提示符，等待用户</li>
+              <li>Enter → UserPromptSubmit Hook → QueryLoop</li>
+            </ul>
+          </div>
+          <div class="card">
+            <div class="card-title" style="color:var(--cyan)">Non-Interactive Mode</div>
+            <ul>
+              <li>检测：!stdin.isTTY 或 --print</li>
+              <li>读取 stdin / --print 参数值</li>
+              <li>跳过欢迎屏，直接进入 QueryLoop</li>
+              <li>输出完毕后 exit（适合脚本/CI）</li>
+            </ul>
+          </div>
+        </div>
+
+        <div style="margin-top:16px; text-align:center; padding: 16px; background: var(--blue-dim); border: 1px solid var(--blue); border-radius: 10px;">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--blue-light); font-weight:700;">
+            → 进入 QueryLoop（见图 01）
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- design decisions table -->
+    <div style="margin-top: 32px;">
+      <div class="section-title">关键设计决策</div>
+      <table>
+        <tr><th>决策</th><th>实现</th><th>理由</th></tr>
+        <tr><td>CLAUDE.md 链式加载</td><td>逐级向上合并，子优先</td><td>支持 monorepo 多级目录上下文</td></tr>
+        <tr><td>Skill 懒加载</td><td>元数据启动预缓存，内容按需展开</td><td>避免 Context 在启动时就被撑满</td></tr>
+        <tr><td>MCP 失败非致命</td><td>warn + skip</td><td>工具不可用不阻断整个会话</td></tr>
+        <tr><td>QueryEngine 单例</td><td>进程级单实例</td><td>状态一致性，避免并发竞争</td></tr>
+        <tr><td>Prompt Cache 预热</td><td>首次请求标记 ephemeral</td><td>同 cwd 的后续请求显著降低成本</td></tr>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function togglePhase(header) {
+  const phase = header.parentElement;
+  phase.classList.toggle('open');
+}
+function activateFlow(el, idx) {
+  document.querySelectorAll('.flow-step').forEach(s => s.classList.remove('active'));
+  el.classList.add('active');
+  const phases = document.querySelectorAll('.phase');
+  if (phases[idx]) {
+    phases[idx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!phases[idx].classList.contains('open')) {
+      phases[idx].classList.add('open');
+    }
+  }
+}
+function scrollTo(id) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!el.classList.contains('open')) el.classList.add('open');
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+  }
+}
+</script>
+
+</body>
+</html>
