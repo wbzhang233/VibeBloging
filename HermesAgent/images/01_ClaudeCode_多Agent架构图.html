@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code · 多Agent编排架构图</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #030712;
+  --cc: #3b82f6;
+  --cc-light: #60a5fa;
+  --cc-dim: #1e3a5f;
+  --text: #e2e8f0;
+  --muted: #475569;
+  --glass: rgba(59,130,246,.06);
+  --glass-border: rgba(59,130,246,.2);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Space Grotesk', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height:100vh;
+}
+body::before {
+  content:'';
+  position:fixed; inset:0;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59,130,246,.15) 0%, transparent 60%),
+    linear-gradient(rgba(59,130,246,.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59,130,246,.02) 1px, transparent 1px);
+  background-size: auto, 50px 50px, 50px 50px;
+  z-index:0; pointer-events:none;
+}
+.page { position:relative; z-index:1; max-width:1300px; margin:0 auto; padding:40px 24px 80px; }
+
+.badge {
+  display:inline-flex; align-items:center; gap:8px;
+  border:1px solid rgba(59,130,246,.3); background:rgba(59,130,246,.08);
+  padding:5px 14px; border-radius:100px; font-size:11px;
+  color:var(--cc-light); letter-spacing:.1em; text-transform:uppercase;
+  margin-bottom:20px; font-family:'JetBrains Mono',monospace;
+}
+h1 {
+  font-size: clamp(36px, 5vw, 68px); font-weight:700; line-height:1.05;
+  color:#fff; margin-bottom:12px;
+}
+h1 span { color:var(--cc); }
+.desc { color:#64748b; font-size:16px; max-width:700px; margin-bottom:56px; line-height:1.7; }
+
+/* MAIN ARCH SVG */
+.arch-container {
+  background: rgba(59,130,246,.03);
+  border: 1px solid rgba(59,130,246,.12);
+  border-radius: 24px;
+  padding: 40px;
+  margin-bottom: 48px;
+  overflow-x: auto;
+}
+.arch-svg { width:100%; min-width:900px; }
+
+/* LAYER STACK */
+.layers-section { margin-bottom:48px; }
+.layers-title { font-size:20px; font-weight:700; color:var(--cc-light); margin-bottom:24px; }
+.layer-stack {
+  display:flex; flex-direction:column; gap:2px;
+}
+.layer {
+  display:flex; align-items:center; gap:20px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 16px 24px;
+  transition: all .3s;
+  cursor:default;
+}
+.layer:hover {
+  background: rgba(59,130,246,.1);
+  transform: translateX(8px);
+  border-color: var(--cc);
+  box-shadow: -4px 0 0 var(--cc);
+}
+.layer-num {
+  width:32px; height:32px; border-radius:8px;
+  background: rgba(59,130,246,.2); border:1px solid rgba(59,130,246,.4);
+  display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono',monospace; font-size:13px;
+  color:var(--cc); flex-shrink:0;
+}
+.layer-content { flex:1; }
+.layer-name { font-weight:700; font-size:15px; color:#fff; margin-bottom:3px; }
+.layer-desc { font-size:13px; color:#64748b; }
+.layer-tag {
+  padding:4px 10px; border-radius:6px; font-size:11px;
+  background: rgba(59,130,246,.15); color:var(--cc);
+  font-family:'JetBrains Mono',monospace; flex-shrink:0;
+}
+
+/* FEATURE GRID */
+.features-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-bottom:48px; }
+@media(max-width:900px){ .features-grid{grid-template-columns:1fr 1fr} }
+@media(max-width:600px){ .features-grid{grid-template-columns:1fr} }
+.feature-card {
+  background:rgba(59,130,246,.05); border:1px solid rgba(59,130,246,.15);
+  border-radius:16px; padding:24px;
+  transition: all .3s;
+}
+.feature-card:hover {
+  background:rgba(59,130,246,.1); border-color:rgba(59,130,246,.4);
+  transform:translateY(-4px); box-shadow:0 12px 40px rgba(59,130,246,.15);
+}
+.feature-icon { font-size:28px; margin-bottom:12px; }
+.feature-name { font-size:15px; font-weight:700; color:var(--cc-light); margin-bottom:8px; }
+.feature-desc { font-size:13px; color:#64748b; line-height:1.6; }
+
+/* TECH STACK */
+.tech-row { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:48px; }
+.tech-chip {
+  padding:8px 16px; border-radius:100px;
+  background: rgba(59,130,246,.1); border:1px solid rgba(59,130,246,.25);
+  color:var(--cc-light); font-family:'JetBrains Mono',monospace; font-size:12px;
+  transition:all .2s;
+}
+.tech-chip:hover { background:rgba(59,130,246,.2); transform:scale(1.05); }
+
+footer { color:#334155; font-size:12px; text-align:center; font-family:'JetBrains Mono',monospace; padding-top:32px; border-top:1px solid rgba(59,130,246,.1); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="badge">⚡ ARCHITECTURE DEEP-DIVE</div>
+  <h1>Claude Code<br><span>多 Agent 编排</span>架构</h1>
+  <p class="desc">Anthropic 官方打造的专业级端侧执行智能体。Coordinator 主代理统筹调度，多个子代理并行执行，每个子代理运行在独立 Git Worktree 隔离沙箱中，实现工程级精准落地。</p>
+
+  <!-- MAIN SVG ARCHITECTURE -->
+  <div class="arch-container">
+    <svg class="arch-svg" viewBox="0 0 1100 560" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#3b82f6"/>
+        </marker>
+        <marker id="arr-sm" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto">
+          <path d="M0,0 L0,5 L6,2.5 z" fill="#60a5fa"/>
+        </marker>
+        <filter id="glow"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <style>
+          .flow { stroke-dasharray:8,5; animation:flowAnim 2s linear infinite; }
+          .flow-fast { stroke-dasharray:6,4; animation:flowAnim 1.2s linear infinite; }
+          @keyframes flowAnim { to { stroke-dashoffset:-26; } }
+          .pulse-ring { animation: pulseRing 2s ease-out infinite; }
+          @keyframes pulseRing { 0%{opacity:.8;r:12} 100%{opacity:0;r:28} }
+        </style>
+        <linearGradient id="grad-cc" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#1d4ed8"/>
+          <stop offset="100%" stop-color="#3b82f6"/>
+        </linearGradient>
+        <linearGradient id="grad-sub" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0f172a"/>
+          <stop offset="100%" stop-color="#1e293b"/>
+        </linearGradient>
+      </defs>
+
+      <!-- USER -->
+      <circle cx="550" cy="45" r="24" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.2)" stroke-width="1.5"/>
+      <text x="550" y="50" text-anchor="middle" font-size="18">👤</text>
+      <text x="550" y="84" text-anchor="middle" fill="#94a3b8" font-family="Space Grotesk" font-size="12">用户输入</text>
+
+      <!-- Arrow user → coordinator -->
+      <line x1="550" y1="70" x2="550" y2="115" stroke="#3b82f6" stroke-width="2" class="flow" marker-end="url(#arr)"/>
+
+      <!-- COORDINATOR -->
+      <rect x="330" y="120" width="440" height="110" rx="16" fill="url(#grad-cc)" filter="url(#glow)"/>
+      <rect x="330" y="120" width="440" height="110" rx="16" fill="none" stroke="#60a5fa" stroke-width="1.5"/>
+      <text x="550" y="160" text-anchor="middle" fill="#fff" font-family="Space Grotesk" font-size="20" font-weight="700">🧠 Coordinator（主代理）</text>
+      <text x="550" y="185" text-anchor="middle" fill="#93c5fd" font-family="Space Grotesk" font-size="13">任务拆解 · 子代理调度 · 结果汇总校验 · 权限审批</text>
+      <text x="550" y="207" text-anchor="middle" fill="#1d4ed8" font-family="JetBrains Mono" font-size="11">TypeScript + Bun · Anthropic SDK</text>
+
+      <!-- Arrows coord → sub-agents -->
+      <line x1="400" y1="232" x2="180" y2="290" stroke="#3b82f6" stroke-width="1.5" class="flow-fast" marker-end="url(#arr-sm)"/>
+      <line x1="470" y1="232" x2="380" y2="290" stroke="#3b82f6" stroke-width="1.5" class="flow-fast" marker-end="url(#arr-sm)"/>
+      <line x1="550" y1="232" x2="550" y2="290" stroke="#3b82f6" stroke-width="1.5" class="flow-fast" marker-end="url(#arr-sm)"/>
+      <line x1="630" y1="232" x2="720" y2="290" stroke="#3b82f6" stroke-width="1.5" class="flow-fast" marker-end="url(#arr-sm)"/>
+      <line x1="700" y1="232" x2="920" y2="290" stroke="#3b82f6" stroke-width="1.5" class="flow-fast" marker-end="url(#arr-sm)"/>
+
+      <!-- SUB-AGENTS -->
+      <!-- Sub 1 -->
+      <rect x="70" y="295" width="200" height="130" rx="14" fill="rgba(30,58,138,.4)" stroke="rgba(59,130,246,.4)" stroke-width="1"/>
+      <text x="170" y="325" text-anchor="middle" fill="#60a5fa" font-family="Space Grotesk" font-size="13" font-weight="600">Sub-Agent 1</text>
+      <text x="170" y="344" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="10">worktree: feature/auth</text>
+      <rect x="88" y="355" width="164" height="24" rx="6" fill="rgba(59,130,246,.1)" stroke="rgba(59,130,246,.2)" stroke-width="1"/>
+      <text x="170" y="372" text-anchor="middle" fill="#93c5fd" font-family="Space Grotesk" font-size="11">🔧 Bash · Git · Files</text>
+      <rect x="88" y="384" width="164" height="24" rx="6" fill="rgba(16,185,129,.08)" stroke="rgba(16,185,129,.2)" stroke-width="1"/>
+      <text x="170" y="401" text-anchor="middle" fill="#6ee7b7" font-family="Space Grotesk" font-size="11">✅ 独立上下文窗口</text>
+
+      <!-- Sub 2 -->
+      <rect x="290" y="295" width="190" height="130" rx="14" fill="rgba(30,58,138,.4)" stroke="rgba(59,130,246,.4)" stroke-width="1"/>
+      <text x="385" y="325" text-anchor="middle" fill="#60a5fa" font-family="Space Grotesk" font-size="13" font-weight="600">Sub-Agent 2</text>
+      <text x="385" y="344" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="10">worktree: feature/api</text>
+      <rect x="306" y="355" width="158" height="24" rx="6" fill="rgba(59,130,246,.1)" stroke="rgba(59,130,246,.2)" stroke-width="1"/>
+      <text x="385" y="372" text-anchor="middle" fill="#93c5fd" font-family="Space Grotesk" font-size="11">🌐 Browser · MCP</text>
+      <rect x="306" y="384" width="158" height="24" rx="6" fill="rgba(16,185,129,.08)" stroke="rgba(16,185,129,.2)" stroke-width="1"/>
+      <text x="385" y="401" text-anchor="middle" fill="#6ee7b7" font-family="Space Grotesk" font-size="11">✅ SendMessage协议</text>
+
+      <!-- Sub 3 -->
+      <rect x="500" y="295" width="100" height="130" rx="14" fill="rgba(30,58,138,.4)" stroke="rgba(96,165,250,.5)" stroke-width="2"/>
+      <text x="550" y="330" text-anchor="middle" fill="#60a5fa" font-family="Space Grotesk" font-size="12" font-weight="700">Agent</text>
+      <text x="550" y="348" text-anchor="middle" fill="#60a5fa" font-family="Space Grotesk" font-size="12" font-weight="700">Teams</text>
+      <text x="550" y="370" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="9">task sharing</text>
+      <text x="550" y="388" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="9">async coord</text>
+
+      <!-- Sub 4 -->
+      <rect x="620" y="295" width="190" height="130" rx="14" fill="rgba(30,58,138,.4)" stroke="rgba(59,130,246,.4)" stroke-width="1"/>
+      <text x="715" y="325" text-anchor="middle" fill="#60a5fa" font-family="Space Grotesk" font-size="13" font-weight="600">Sub-Agent 3</text>
+      <text x="715" y="344" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="10">worktree: test/e2e</text>
+      <rect x="636" y="355" width="158" height="24" rx="6" fill="rgba(59,130,246,.1)" stroke="rgba(59,130,246,.2)" stroke-width="1"/>
+      <text x="715" y="372" text-anchor="middle" fill="#93c5fd" font-family="Space Grotesk" font-size="11">🧪 Test · Review</text>
+      <rect x="636" y="384" width="158" height="24" rx="6" fill="rgba(16,185,129,.08)" stroke="rgba(16,185,129,.2)" stroke-width="1"/>
+      <text x="715" y="401" text-anchor="middle" fill="#6ee7b7" font-family="Space Grotesk" font-size="11">✅ 依赖追踪</text>
+
+      <!-- Sub 5 -->
+      <rect x="830" y="295" width="190" height="130" rx="14" fill="rgba(30,58,138,.4)" stroke="rgba(59,130,246,.4)" stroke-width="1"/>
+      <text x="925" y="325" text-anchor="middle" fill="#60a5fa" font-family="Space Grotesk" font-size="13" font-weight="600">Sub-Agent 4</text>
+      <text x="925" y="344" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="10">worktree: ci/deploy</text>
+      <rect x="846" y="355" width="158" height="24" rx="6" fill="rgba(59,130,246,.1)" stroke="rgba(59,130,246,.2)" stroke-width="1"/>
+      <text x="925" y="372" text-anchor="middle" fill="#93c5fd" font-family="Space Grotesk" font-size="11">🚀 CI/CD · Deploy</text>
+      <rect x="846" y="384" width="158" height="24" rx="6" fill="rgba(16,185,129,.08)" stroke="rgba(16,185,129,.2)" stroke-width="1"/>
+      <text x="925" y="401" text-anchor="middle" fill="#6ee7b7" font-family="Space Grotesk" font-size="11">✅ 权限沙箱</text>
+
+      <!-- Horizontal connector between sub-agents (SendMessage) -->
+      <path d="M270,360 L290,360" stroke="#1d4ed8" stroke-width="1" stroke-dasharray="3,3"/>
+      <path d="M480,360 L500,360" stroke="#1d4ed8" stroke-width="1" stroke-dasharray="3,3"/>
+      <path d="M600,360 L620,360" stroke="#1d4ed8" stroke-width="1" stroke-dasharray="3,3"/>
+      <path d="M810,360 L830,360" stroke="#1d4ed8" stroke-width="1" stroke-dasharray="3,3"/>
+
+      <!-- Results back to coordinator -->
+      <line x1="180" y1="427" x2="460" y2="480" stroke="#1d4ed8" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-sm)"/>
+      <line x1="385" y1="427" x2="490" y2="480" stroke="#1d4ed8" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-sm)"/>
+      <line x1="550" y1="427" x2="550" y2="480" stroke="#1d4ed8" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-sm)"/>
+      <line x1="715" y1="427" x2="600" y2="480" stroke="#1d4ed8" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-sm)"/>
+      <line x1="925" y1="427" x2="640" y2="480" stroke="#1d4ed8" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-sm)"/>
+
+      <!-- OUTPUT BAR -->
+      <rect x="350" y="485" width="400" height="56" rx="14" fill="rgba(16,185,129,.1)" stroke="rgba(16,185,129,.3)" stroke-width="1.5"/>
+      <text x="550" y="511" text-anchor="middle" fill="#10b981" font-family="Space Grotesk" font-size="14" font-weight="700">✅ 结果汇总 · 权限审批 · 最终交付</text>
+      <text x="550" y="530" text-anchor="middle" fill="#065f46" font-family="JetBrains Mono" font-size="11">PR merge · Code review · CI pass</text>
+
+      <!-- Labels -->
+      <text x="550" y="275" text-anchor="middle" fill="#1e40af" font-family="Space Grotesk" font-size="11">— 并行执行 / 独立 Worktree 隔离 —</text>
+    </svg>
+  </div>
+
+  <!-- LAYERS -->
+  <div class="layers-section">
+    <div class="layers-title">记忆层次架构</div>
+    <div class="layer-stack">
+      <div class="layer">
+        <div class="layer-num">L1</div>
+        <div class="layer-content">
+          <div class="layer-name">项目记忆（CLAUDE.md）</div>
+          <div class="layer-desc">当前项目全局规则与上下文，每次会话自动加载，人工手动维护</div>
+        </div>
+        <div class="layer-tag">PROJECT</div>
+      </div>
+      <div class="layer">
+        <div class="layer-num">L2</div>
+        <div class="layer-content">
+          <div class="layer-name">用户记忆（~/.claude/claude.md）</div>
+          <div class="layer-desc">个人操作偏好与长期规则，跨项目持久化，人工配置</div>
+        </div>
+        <div class="layer-tag">USER</div>
+      </div>
+      <div class="layer">
+        <div class="layer-num">L3</div>
+        <div class="layer-content">
+          <div class="layer-name">会话记忆</div>
+          <div class="layer-desc">单次会话上下文，/resume 命令跨会话恢复，会话结束后 auto-dream 异步整合</div>
+        </div>
+        <div class="layer-tag">SESSION</div>
+      </div>
+      <div class="layer">
+        <div class="layer-num">L4</div>
+        <div class="layer-content">
+          <div class="layer-name">团队共享记忆（Agent Teams）</div>
+          <div class="layer-desc">多代理协作时共享任务上下文与协作规则，通过 SendMessage 协议同步</div>
+        </div>
+        <div class="layer-tag">TEAM</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">🔒</div>
+      <div class="feature-name">Git Worktree 隔离</div>
+      <div class="feature-desc">每个 Sub-Agent 在独立 git worktree 中运行，彻底避免上下文污染，支持工具级沙箱权限管控</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📡</div>
+      <div class="feature-name">SendMessage 协议</div>
+      <div class="feature-desc">子代理之间通过 SendMessage 协议直接通信，共享带依赖追踪的任务列表，支持异议协调</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🖥️</div>
+      <div class="feature-name">Computer Use</div>
+      <div class="feature-desc">macOS 全桌面控制能力，支持点击、拖拽、截图、跨应用操作，实现真正端侧自动化</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔌</div>
+      <div class="feature-name">MCP 协议</div>
+      <div class="feature-desc">Model Context Protocol 原生支持，无限扩展第三方工具与服务，内置 45+ 官方工具</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📱</div>
+      <div class="feature-name">Dispatch 移动端</div>
+      <div class="feature-desc">通过 Dispatch 实现移动端远程控制，跨设备管理运行中的 Agent 任务</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔐</div>
+      <div class="feature-name">精准权限管控</div>
+      <div class="feature-desc">细粒度权限审批机制，危险操作需用户确认，企业级合规与成本跟踪</div>
+    </div>
+  </div>
+
+  <!-- TECH STACK -->
+  <div style="margin-bottom:48px">
+    <div class="layers-title" style="margin-bottom:16px">技术栈</div>
+    <div class="tech-row">
+      <span class="tech-chip">TypeScript</span>
+      <span class="tech-chip">Bun Runtime</span>
+      <span class="tech-chip">React + Ink</span>
+      <span class="tech-chip">Anthropic SDK</span>
+      <span class="tech-chip">Claude 3.x / 4.x</span>
+      <span class="tech-chip">MCP Protocol</span>
+      <span class="tech-chip">Git Worktree</span>
+      <span class="tech-chip">Playwright</span>
+    </div>
+  </div>
+
+  <footer>
+    Claude Code Architecture · Anthropic Official · v2.1.88<br>
+    <span style="opacity:.4">VibeBloging Architecture Series 2026</span>
+  </footer>
+</div>
+</body>
+</html>

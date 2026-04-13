@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code · 多 Agent & Worktree 编排</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #030712;
+  --cc: #3b82f6;
+  --cc-light: #60a5fa;
+  --text: #e2e8f0;
+  --muted: #475569;
+  --glass: rgba(59,130,246,.06);
+  --glass-border: rgba(59,130,246,.18);
+  --coord: #f59e0b;   /* coordinator: gold */
+  --explore: #06b6d4; /* explore: cyan */
+  --plan: #8b5cf6;    /* plan: purple */
+  --exec: #10b981;    /* execute: green */
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+body::before {
+  content:''; position:fixed; inset:0;
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 50%, rgba(245,158,11,.05) 0%, transparent 60%),
+    linear-gradient(rgba(59,130,246,.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59,130,246,.02) 1px, transparent 1px);
+  background-size: auto, 50px 50px, 50px 50px;
+  z-index:0; pointer-events:none;
+}
+.page { position:relative; z-index:1; max-width:1400px; margin:0 auto; padding:40px 24px 80px; }
+
+.badge { display:inline-flex; align-items:center; gap:8px; border:1px solid rgba(245,158,11,.3); background:rgba(245,158,11,.08); padding:5px 14px; border-radius:100px; font-size:11px; color:#fbbf24; letter-spacing:.1em; text-transform:uppercase; margin-bottom:20px; font-family:'JetBrains Mono',monospace; }
+.badge .dot { width:6px; height:6px; border-radius:50%; background:var(--coord); animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.5)} 50%{box-shadow:0 0 0 8px rgba(245,158,11,0)} }
+h1 { font-size:clamp(32px,5vw,64px); font-weight:700; line-height:1.05; color:#fff; margin-bottom:10px; }
+h1 span { color:var(--coord); }
+.subtitle { color:var(--muted); font-size:16px; max-width:700px; margin-bottom:48px; line-height:1.7; }
+
+/* AGENT DIAGRAM */
+.diagram-section {
+  background:rgba(245,158,11,.03); border:1px solid rgba(245,158,11,.15);
+  border-radius:20px; padding:32px; margin-bottom:40px;
+  overflow-x:auto;
+}
+.diag-svg { width:100%; min-width:900px; }
+
+/* AGENT CARDS ROW */
+.agents-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:16px; margin-bottom:40px; }
+@media(max-width:1000px){ .agents-grid{grid-template-columns:1fr 1fr;} }
+@media(max-width:600px){ .agents-grid{grid-template-columns:1fr;} }
+
+.agent-card {
+  border-radius:16px; padding:20px;
+  border:1px solid var(--ac-border);
+  background:var(--ac-bg);
+  position:relative; overflow:hidden;
+  transition:all .3s;
+}
+.agent-card:hover { transform:translateY(-4px); box-shadow:0 8px 30px var(--ac-glow); }
+.agent-card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background:var(--ac-color); box-shadow:0 0 16px var(--ac-color);
+}
+
+.ac-coord { --ac-color:#f59e0b; --ac-border:rgba(245,158,11,.25); --ac-bg:rgba(245,158,11,.06); --ac-glow:rgba(245,158,11,.25); }
+.ac-explore { --ac-color:#06b6d4; --ac-border:rgba(6,182,212,.25); --ac-bg:rgba(6,182,212,.06); --ac-glow:rgba(6,182,212,.25); }
+.ac-plan { --ac-color:#8b5cf6; --ac-border:rgba(139,92,246,.25); --ac-bg:rgba(139,92,246,.06); --ac-glow:rgba(139,92,246,.25); }
+.ac-exec { --ac-color:#10b981; --ac-border:rgba(16,185,129,.25); --ac-bg:rgba(16,185,129,.06); --ac-glow:rgba(16,185,129,.25); }
+
+.ac-label { font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--ac-color); margin-bottom:8px; font-family:'JetBrains Mono',monospace; }
+.ac-name { font-size:16px; font-weight:700; color:#fff; margin-bottom:8px; }
+.ac-tools { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:10px; }
+.ac-tool { padding:3px 8px; border-radius:4px; font-size:10px; font-family:'JetBrains Mono',monospace; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); color:var(--muted); }
+.ac-ctx { font-size:11px; color:var(--muted); padding:6px 10px; border-radius:6px; background:rgba(0,0,0,.3); font-family:'JetBrains Mono',monospace; }
+
+/* WORKTREE SECTION */
+.wt-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:40px; }
+@media(max-width:800px){ .wt-grid{grid-template-columns:1fr;} }
+
+.wt-card { background:var(--glass); border:1px solid var(--glass-border); border-radius:16px; padding:24px; }
+.wt-title { font-size:13px; color:var(--cc-light); letter-spacing:.1em; text-transform:uppercase; font-weight:700; margin-bottom:16px; }
+
+.lifecycle { display:flex; flex-direction:column; gap:0; }
+.lc-item { display:flex; gap:12px; align-items:flex-start; position:relative; }
+.lc-item:not(:last-child)::after {
+  content:''; position:absolute; left:11px; top:24px;
+  width:2px; height:calc(100% - 8px);
+  background:rgba(59,130,246,.15);
+}
+.lc-dot {
+  width:24px; height:24px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:10px; font-family:'JetBrains Mono',monospace; font-weight:700;
+  margin-top:2px;
+}
+.lc-dot.create { background:rgba(16,185,129,.2); border:1px solid rgba(16,185,129,.5); color:#34d399; }
+.lc-dot.run { background:rgba(59,130,246,.2); border:1px solid rgba(59,130,246,.5); color:#60a5fa; }
+.lc-dot.merge { background:rgba(245,158,11,.2); border:1px solid rgba(245,158,11,.5); color:#fbbf24; }
+.lc-dot.clean { background:rgba(239,68,68,.2); border:1px solid rgba(239,68,68,.5); color:#f87171; }
+.lc-body { padding-bottom:18px; }
+.lc-name { font-size:13px; font-weight:600; color:#fff; margin-bottom:2px; font-family:'JetBrains Mono',monospace; }
+.lc-cmd { font-size:11px; color:#4b5563; background:#0d1117; padding:4px 8px; border-radius:4px; margin-top:4px; display:inline-block; border:1px solid rgba(255,255,255,.06); }
+
+/* ISOLATION TABLE */
+.iso-table { width:100%; border-collapse:collapse; }
+.iso-table th { text-align:left; padding:10px 16px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); border-bottom:1px solid rgba(59,130,246,.1); }
+.iso-table td { padding:11px 16px; font-size:12px; border-bottom:1px solid rgba(255,255,255,.04); }
+.iso-table tr:last-child td { border-bottom:none; }
+.iso-table tr:hover td { background:rgba(59,130,246,.05); }
+.iso-table td:first-child { color:#fff; font-family:'JetBrains Mono',monospace; font-weight:600; }
+.yes { color:#34d399; }
+.no { color:#f87171; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="badge"><span class="dot"></span>InsightClaudeCode · Vol.03</div>
+  <h1>多 Agent &<br><span>Worktree 编排</span></h1>
+  <p class="subtitle">并行宇宙 · Coordinator 主代理 · 3 类专用子代理 · git worktree 隔离 · SendMessage 通信</p>
+
+  <!-- SVG DIAGRAM -->
+  <div class="diagram-section">
+    <svg class="diag-svg" viewBox="0 0 1000 360">
+      <defs>
+        <marker id="marr-gold" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#f59e0b"/>
+        </marker>
+        <marker id="marr-cyan" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#06b6d4"/>
+        </marker>
+        <marker id="marr-purple" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#8b5cf6"/>
+        </marker>
+        <marker id="marr-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#10b981"/>
+        </marker>
+        <filter id="glow-gold">
+          <feGaussianBlur stdDeviation="4" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+
+      <!-- COORDINATOR -->
+      <rect x="380" y="20" width="240" height="80" rx="12"
+        fill="rgba(245,158,11,.1)" stroke="rgba(245,158,11,.5)" stroke-width="1.5"
+        filter="url(#glow-gold)"/>
+      <text x="500" y="48" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="10" fill="#f59e0b" font-weight="bold">COORDINATOR</text>
+      <text x="500" y="66" text-anchor="middle" font-family="'Space Grotesk',sans-serif" font-size="14" fill="#fff" font-weight="700">主 Agent</text>
+      <text x="500" y="84" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#78716c">全工具权限 · 完整上下文</text>
+
+      <!-- Connection lines: coordinator → sub-agents -->
+      <!-- To Explore1 -->
+      <path d="M420,100 L200,200" stroke="rgba(6,182,212,.4)" stroke-width="1.5" stroke-dasharray="5,3" fill="none" marker-end="url(#marr-cyan)">
+        <animate attributeName="stroke-dashoffset" from="0" to="-16" dur="1s" repeatCount="indefinite"/>
+      </path>
+      <!-- To Explore2 -->
+      <path d="M480,100 L400,200" stroke="rgba(6,182,212,.4)" stroke-width="1.5" stroke-dasharray="5,3" fill="none" marker-end="url(#marr-cyan)">
+        <animate attributeName="stroke-dashoffset" from="0" to="-16" dur="1s" repeatCount="indefinite" begin=".3s"/>
+      </path>
+      <!-- To Plan -->
+      <path d="M500,100 L600,200" stroke="rgba(139,92,246,.4)" stroke-width="1.5" stroke-dasharray="5,3" fill="none" marker-end="url(#marr-purple)">
+        <animate attributeName="stroke-dashoffset" from="0" to="-16" dur="1s" repeatCount="indefinite" begin=".6s"/>
+      </path>
+      <!-- To Execute -->
+      <path d="M580,100 L800,200" stroke="rgba(16,185,129,.4)" stroke-width="1.5" stroke-dasharray="5,3" fill="none" marker-end="url(#marr-green)">
+        <animate attributeName="stroke-dashoffset" from="0" to="-16" dur="1s" repeatCount="indefinite" begin=".9s"/>
+      </path>
+
+      <!-- EXPLORE 1 -->
+      <rect x="80" y="200" width="200" height="130" rx="10"
+        fill="rgba(6,182,212,.06)" stroke="rgba(6,182,212,.3)" stroke-width="1"/>
+      <text x="180" y="220" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#06b6d4" font-weight="bold">EXPLORE · 子代理 #1</text>
+      <text x="180" y="240" text-anchor="middle" font-family="'Space Grotesk',sans-serif" font-size="11" fill="#e2e8f0">探索认证模块</text>
+      <text x="180" y="258" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="8" fill="#475569">Glob · Grep · Read · WebFetch</text>
+      <rect x="95" y="268" width="170" height="18" rx="4" fill="rgba(6,182,212,.08)" stroke="rgba(6,182,212,.2)" stroke-width="1"/>
+      <text x="180" y="281" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#67e8f9">独立上下文 · 只读权限</text>
+      <rect x="95" y="295" width="170" height="28" rx="4" fill="rgba(0,0,0,.3)"/>
+      <text x="180" y="313" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#475569">→ 返回探索摘要</text>
+
+      <!-- EXPLORE 2 -->
+      <rect x="310" y="200" width="200" height="130" rx="10"
+        fill="rgba(6,182,212,.06)" stroke="rgba(6,182,212,.3)" stroke-width="1"/>
+      <text x="410" y="220" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#06b6d4" font-weight="bold">EXPLORE · 子代理 #2</text>
+      <text x="410" y="240" text-anchor="middle" font-family="'Space Grotesk',sans-serif" font-size="11" fill="#e2e8f0">探索数据库层</text>
+      <text x="410" y="258" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="8" fill="#475569">Glob · Grep · Read · WebFetch</text>
+      <rect x="325" y="268" width="170" height="18" rx="4" fill="rgba(6,182,212,.08)" stroke="rgba(6,182,212,.2)" stroke-width="1"/>
+      <text x="410" y="281" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#67e8f9">独立上下文 · 只读权限</text>
+      <rect x="325" y="295" width="170" height="28" rx="4" fill="rgba(0,0,0,.3)"/>
+      <text x="410" y="313" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#475569">→ 返回探索摘要</text>
+
+      <!-- PLAN -->
+      <rect x="540" y="200" width="200" height="130" rx="10"
+        fill="rgba(139,92,246,.06)" stroke="rgba(139,92,246,.3)" stroke-width="1"/>
+      <text x="640" y="220" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#8b5cf6" font-weight="bold">PLAN · 子代理</text>
+      <text x="640" y="240" text-anchor="middle" font-family="'Space Grotesk',sans-serif" font-size="11" fill="#e2e8f0">设计实现方案</text>
+      <text x="640" y="258" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="8" fill="#475569">Glob · Grep · Read</text>
+      <rect x="555" y="268" width="170" height="18" rx="4" fill="rgba(139,92,246,.08)" stroke="rgba(139,92,246,.2)" stroke-width="1"/>
+      <text x="640" y="281" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#c084fc">独立上下文 · 只读权限</text>
+      <rect x="555" y="295" width="170" height="28" rx="4" fill="rgba(0,0,0,.3)"/>
+      <text x="640" y="313" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#475569">→ 返回实现计划</text>
+
+      <!-- EXECUTE -->
+      <rect x="720" y="200" width="220" height="130" rx="10"
+        fill="rgba(16,185,129,.06)" stroke="rgba(16,185,129,.3)" stroke-width="1.5"/>
+      <text x="830" y="220" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#10b981" font-weight="bold">EXECUTE · 子代理</text>
+      <text x="830" y="240" text-anchor="middle" font-family="'Space Grotesk',sans-serif" font-size="11" fill="#e2e8f0">执行代码修改</text>
+      <text x="830" y="258" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="8" fill="#475569">全工具 · worktree 隔离</text>
+      <rect x="735" y="268" width="190" height="18" rx="4" fill="rgba(16,185,129,.08)" stroke="rgba(16,185,129,.2)" stroke-width="1"/>
+      <text x="830" y="281" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#34d399">独立上下文 + 独立分支</text>
+      <rect x="735" y="295" width="190" height="28" rx="4" fill="rgba(0,0,0,.3)"/>
+      <text x="830" y="313" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#475569">→ 返回执行摘要 + diff</text>
+
+      <!-- SendMessage horizontal line -->
+      <line x1="280" y1="340" x2="720" y2="340" stroke="rgba(59,130,246,.2)" stroke-width="1" stroke-dasharray="4,4"/>
+      <text x="500" y="356" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#3b82f6">SendMessage 协议 · 子代理间直接通信</text>
+
+      <!-- Summary arrows back to coordinator -->
+      <path d="M180,200 L430,105" stroke="rgba(6,182,212,.25)" stroke-width="1" stroke-dasharray="3,3" fill="none"/>
+      <path d="M410,200 L490,105" stroke="rgba(6,182,212,.25)" stroke-width="1" stroke-dasharray="3,3" fill="none"/>
+      <path d="M640,200 L510,105" stroke="rgba(139,92,246,.25)" stroke-width="1" stroke-dasharray="3,3" fill="none"/>
+      <path d="M830,200 L570,105" stroke="rgba(16,185,129,.25)" stroke-width="1" stroke-dasharray="3,3" fill="none"/>
+
+      <text x="500" y="180" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#64748b">← 摘要汇聚 →</text>
+    </svg>
+  </div>
+
+  <!-- AGENT TYPE CARDS -->
+  <div class="agents-grid">
+    <div class="agent-card ac-coord">
+      <div class="ac-label">Coordinator</div>
+      <div class="ac-name">主代理</div>
+      <div class="ac-tools">
+        <span class="ac-tool">全工具</span>
+        <span class="ac-tool">任务规划</span>
+        <span class="ac-tool">结果整合</span>
+      </div>
+      <div class="ac-ctx">完整对话历史 · 全局视角</div>
+    </div>
+    <div class="agent-card ac-explore">
+      <div class="ac-label">Explore</div>
+      <div class="ac-name">探索子代理</div>
+      <div class="ac-tools">
+        <span class="ac-tool">Glob</span>
+        <span class="ac-tool">Grep</span>
+        <span class="ac-tool">Read</span>
+        <span class="ac-tool">WebFetch</span>
+      </div>
+      <div class="ac-ctx">只读 · 无 Edit/Write</div>
+    </div>
+    <div class="agent-card ac-plan">
+      <div class="ac-label">Plan</div>
+      <div class="ac-name">规划子代理</div>
+      <div class="ac-tools">
+        <span class="ac-tool">Glob</span>
+        <span class="ac-tool">Grep</span>
+        <span class="ac-tool">Read</span>
+      </div>
+      <div class="ac-ctx">只读 · 架构设计专用</div>
+    </div>
+    <div class="agent-card ac-exec">
+      <div class="ac-label">Execute</div>
+      <div class="ac-name">执行子代理</div>
+      <div class="ac-tools">
+        <span class="ac-tool">全工具</span>
+        <span class="ac-tool">worktree</span>
+        <span class="ac-tool">隔离分支</span>
+      </div>
+      <div class="ac-ctx">完整权限 · git 隔离</div>
+    </div>
+  </div>
+
+  <!-- WORKTREE + ISOLATION -->
+  <div class="wt-grid">
+    <div class="wt-card">
+      <p class="wt-title">Worktree 生命周期</p>
+      <div class="lifecycle">
+        <div class="lc-item">
+          <div class="lc-dot create">+</div>
+          <div class="lc-body">
+            <div class="lc-name">创建 worktree</div>
+            <div class="lc-cmd">EnterWorktree(name="feature-x")</div>
+            <div class="lc-cmd">git worktree add .claude/worktrees/feature-x -b branch/x</div>
+          </div>
+        </div>
+        <div class="lc-item">
+          <div class="lc-dot run">↻</div>
+          <div class="lc-body">
+            <div class="lc-name">子代理独立执行</div>
+            <div class="lc-cmd">所有文件修改在独立分支，不影响 main</div>
+          </div>
+        </div>
+        <div class="lc-item">
+          <div class="lc-dot merge">⇌</div>
+          <div class="lc-body">
+            <div class="lc-name">主代理审查并合并</div>
+            <div class="lc-cmd">git diff worktree/x → cherry-pick / merge</div>
+          </div>
+        </div>
+        <div class="lc-item">
+          <div class="lc-dot clean">×</div>
+          <div class="lc-body">
+            <div class="lc-name">清理 worktree</div>
+            <div class="lc-cmd">ExitWorktree(action="remove")</div>
+            <div class="lc-cmd">git worktree remove + git branch -d</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wt-card">
+      <p class="wt-title">隔离维度总结</p>
+      <table class="iso-table">
+        <thead><tr><th>隔离维度</th><th>是否隔离</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>上下文窗口</td><td class="yes">✓ 完全隔离</td><td style="font-size:11px;color:var(--muted);">每个子代理有独立对话历史</td></tr>
+          <tr><td>文件系统</td><td class="yes">✓ 可选</td><td style="font-size:11px;color:var(--muted);">isolation: "worktree" 参数</td></tr>
+          <tr><td>工具权限</td><td class="yes">✓ 按类型</td><td style="font-size:11px;color:var(--muted);">Explore/Plan 只读</td></tr>
+          <tr><td>git 历史</td><td class="yes">✓ worktree</td><td style="font-size:11px;color:var(--muted);">独立分支，主代理合并</td></tr>
+          <tr><td>环境变量</td><td class="no">✗ 共享</td><td style="font-size:11px;color:var(--muted);">继承父进程环境</td></tr>
+          <tr><td>MCP 连接</td><td class="no">✗ 共享</td><td style="font-size:11px;color:var(--muted);">复用已建立连接</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code · 工具执行流水线</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #030712;
+  --cc: #3b82f6;
+  --cc-light: #60a5fa;
+  --text: #e2e8f0;
+  --muted: #475569;
+  --glass: rgba(59,130,246,.06);
+  --glass-border: rgba(59,130,246,.18);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+body::before {
+  content:''; position:fixed; inset:0;
+  background:
+    radial-gradient(ellipse 70% 40% at 20% 50%, rgba(59,130,246,.08) 0%, transparent 60%),
+    linear-gradient(rgba(59,130,246,.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59,130,246,.02) 1px, transparent 1px);
+  background-size: auto, 50px 50px, 50px 50px;
+  z-index:0; pointer-events:none;
+}
+.page { position:relative; z-index:1; max-width:1400px; margin:0 auto; padding:40px 24px 80px; }
+
+.badge { display:inline-flex; align-items:center; gap:8px; border:1px solid rgba(59,130,246,.3); background:rgba(59,130,246,.08); padding:5px 14px; border-radius:100px; font-size:11px; color:var(--cc-light); letter-spacing:.1em; text-transform:uppercase; margin-bottom:20px; font-family:'JetBrains Mono',monospace; }
+.badge .dot { width:6px; height:6px; border-radius:50%; background:var(--cc); animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(59,130,246,.5)} 50%{box-shadow:0 0 0 8px rgba(59,130,246,0)} }
+h1 { font-size:clamp(32px,5vw,64px); font-weight:700; line-height:1.05; color:#fff; margin-bottom:10px; }
+h1 span { color:var(--cc); }
+.subtitle { color:var(--muted); font-size:16px; max-width:700px; margin-bottom:48px; line-height:1.7; }
+
+/* MAIN LAYOUT */
+.main-grid { display:grid; grid-template-columns:280px 1fr 300px; gap:24px; margin-bottom:40px; }
+@media(max-width:1100px){ .main-grid{grid-template-columns:1fr;} }
+
+/* TOOL TREE */
+.tool-tree { background:var(--glass); border:1px solid var(--glass-border); border-radius:16px; padding:20px; }
+.tree-title { font-size:13px; color:var(--cc-light); letter-spacing:.1em; text-transform:uppercase; font-weight:700; margin-bottom:16px; }
+.tree-category { margin-bottom:12px; }
+.tree-cat-label {
+  font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+  padding:4px 10px; border-radius:4px; margin-bottom:6px;
+  display:inline-block;
+}
+.tc-file { color:#06b6d4; background:rgba(6,182,212,.1); }
+.tc-exec { color:#10b981; background:rgba(16,185,129,.1); }
+.tc-net  { color:#8b5cf6; background:rgba(139,92,246,.1); }
+.tc-coll { color:#f59e0b; background:rgba(245,158,11,.1); }
+.tc-sys  { color:#ec4899; background:rgba(236,72,153,.1); }
+.tree-tools { display:flex; flex-direction:column; gap:4px; padding-left:12px; }
+.tree-tool {
+  display:flex; align-items:center; gap:8px;
+  padding:6px 10px; border-radius:6px;
+  font-family:'JetBrains Mono',monospace; font-size:11px;
+  background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06);
+  cursor:pointer; transition:all .2s;
+}
+.tree-tool:hover { background:rgba(59,130,246,.1); border-color:var(--cc-light); color:#fff; }
+.tree-tool .freq { margin-left:auto; }
+.freq-dot { width:6px; height:6px; border-radius:50%; }
+
+/* PIPELINE */
+.pipeline { background:rgba(59,130,246,.03); border:1px solid rgba(59,130,246,.15); border-radius:16px; padding:24px; }
+.pipe-title { font-size:13px; color:var(--cc-light); letter-spacing:.1em; text-transform:uppercase; font-weight:700; margin-bottom:24px; }
+
+.pipe-steps { display:flex; flex-direction:column; gap:0; }
+.pipe-step {
+  display:flex; gap:16px; align-items:flex-start;
+  padding:16px 0;
+  border-bottom:1px solid rgba(59,130,246,.08);
+  cursor:pointer; transition:all .2s;
+}
+.pipe-step:last-child { border-bottom:none; }
+.pipe-step:hover .ps-content { transform:translateX(4px); }
+.pipe-step.active .ps-num { background:rgba(59,130,246,.3); border-color:var(--cc); box-shadow:0 0 16px rgba(59,130,246,.5); color:#fff; }
+.pipe-step.active .ps-name { color:var(--cc-light); }
+
+.ps-num {
+  width:32px; height:32px; border-radius:50%; flex-shrink:0;
+  background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1);
+  display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700;
+  color:var(--muted); transition:all .3s;
+}
+.ps-content { transition:transform .2s; }
+.ps-name { font-size:14px; font-weight:600; color:#fff; margin-bottom:4px; }
+.ps-desc { font-size:12px; color:var(--muted); line-height:1.5; font-family:'JetBrains Mono',monospace; }
+.ps-tag { display:inline-block; padding:2px 8px; border-radius:4px; font-size:10px; margin-top:4px; }
+.tag-parse { background:rgba(6,182,212,.1); color:#06b6d4; border:1px solid rgba(6,182,212,.2); }
+.tag-perm { background:rgba(245,158,11,.1); color:#fbbf24; border:1px solid rgba(245,158,11,.2); }
+.tag-hook { background:rgba(139,92,246,.1); color:#c084fc; border:1px solid rgba(139,92,246,.2); }
+.tag-exec { background:rgba(16,185,129,.1); color:#34d399; border:1px solid rgba(16,185,129,.2); }
+.tag-inject { background:rgba(59,130,246,.1); color:#60a5fa; border:1px solid rgba(59,130,246,.2); }
+
+/* BUBBLE CHART */
+.bubble-section { background:var(--glass); border:1px solid var(--glass-border); border-radius:16px; padding:20px; }
+.bubble-title { font-size:13px; color:var(--cc-light); letter-spacing:.1em; text-transform:uppercase; font-weight:700; margin-bottom:16px; }
+.bubbles { display:flex; flex-direction:column; gap:8px; }
+.bubble-row { display:flex; align-items:center; gap:10px; }
+.bubble-name { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text); width:90px; flex-shrink:0; }
+.bubble-bar {
+  height:20px; border-radius:4px;
+  display:flex; align-items:center; padding:0 8px;
+  font-size:10px; font-family:'JetBrains Mono',monospace;
+  color:rgba(255,255,255,.6); transition:all .3s;
+  cursor:default;
+}
+.bubble-bar:hover { filter:brightness(1.3); }
+
+/* BOTTOM TABLE */
+.bottom-section { margin-top:16px; }
+.section-title { font-size:13px; color:var(--cc-light); letter-spacing:.1em; text-transform:uppercase; font-weight:700; margin-bottom:16px; }
+.tools-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:10px; }
+.tool-card {
+  background:var(--glass); border:1px solid var(--glass-border);
+  border-radius:10px; padding:14px 16px;
+  transition:all .2s;
+}
+.tool-card:hover { background:rgba(59,130,246,.1); border-color:var(--cc-light); transform:translateY(-2px); }
+.tc-name { font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700; color:#fff; margin-bottom:4px; }
+.tc-desc { font-size:11px; color:var(--muted); line-height:1.4; }
+.tc-tag { font-size:10px; margin-top:6px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="badge"><span class="dot"></span>InsightClaudeCode · Vol.02</div>
+  <h1>工具执行<br><span>流水线</span></h1>
+  <p class="subtitle">45+ 内置工具全景 · 单次调用完整管道 · 权限 + Hooks 注入 · 调用量分布</p>
+
+  <div class="main-grid">
+
+    <!-- TOOL TREE -->
+    <div class="tool-tree">
+      <p class="tree-title">工具分类树</p>
+
+      <div class="tree-category">
+        <div class="tree-cat-label tc-file">📄 文件操作</div>
+        <div class="tree-tools">
+          <div class="tree-tool">Read <span class="freq"><span class="freq-dot" style="background:#06b6d4"></span></span></div>
+          <div class="tree-tool">Write <span class="freq"><span class="freq-dot" style="background:#3b82f6"></span></span></div>
+          <div class="tree-tool">Edit <span class="freq"><span class="freq-dot" style="background:#3b82f6"></span></span></div>
+          <div class="tree-tool">Glob <span class="freq"><span class="freq-dot" style="background:#06b6d4"></span></span></div>
+          <div class="tree-tool">Grep <span class="freq"><span class="freq-dot" style="background:#06b6d4"></span></span></div>
+          <div class="tree-tool">NotebookEdit <span class="freq"><span class="freq-dot" style="background:#475569"></span></span></div>
+        </div>
+      </div>
+
+      <div class="tree-category">
+        <div class="tree-cat-label tc-exec">⚡ 执行</div>
+        <div class="tree-tools">
+          <div class="tree-tool">Bash <span class="freq"><span class="freq-dot" style="background:#10b981"></span></span></div>
+          <div class="tree-tool">TaskOutput <span class="freq"><span class="freq-dot" style="background:#475569"></span></span></div>
+          <div class="tree-tool">TaskStop <span class="freq"><span class="freq-dot" style="background:#475569"></span></span></div>
+        </div>
+      </div>
+
+      <div class="tree-category">
+        <div class="tree-cat-label tc-net">🌐 网络</div>
+        <div class="tree-tools">
+          <div class="tree-tool">WebFetch <span class="freq"><span class="freq-dot" style="background:#8b5cf6"></span></span></div>
+          <div class="tree-tool">WebSearch <span class="freq"><span class="freq-dot" style="background:#475569"></span></span></div>
+        </div>
+      </div>
+
+      <div class="tree-category">
+        <div class="tree-cat-label tc-coll">🤝 协作</div>
+        <div class="tree-tools">
+          <div class="tree-tool">Agent <span class="freq"><span class="freq-dot" style="background:#f59e0b"></span></span></div>
+          <div class="tree-tool">SendMessage <span class="freq"><span class="freq-dot" style="background:#f59e0b"></span></span></div>
+          <div class="tree-tool">TaskCreate <span class="freq"><span class="freq-dot" style="background:#f59e0b"></span></span></div>
+          <div class="tree-tool">TodoWrite <span class="freq"><span class="freq-dot" style="background:#475569"></span></span></div>
+        </div>
+      </div>
+
+      <div class="tree-category">
+        <div class="tree-cat-label tc-sys">🔧 系统</div>
+        <div class="tree-tools">
+          <div class="tree-tool">AskUserQuestion</div>
+          <div class="tree-tool">EnterPlanMode</div>
+          <div class="tree-tool">EnterWorktree</div>
+          <div class="tree-tool">CronCreate</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PIPELINE -->
+    <div class="pipeline">
+      <p class="pipe-title">单次工具调用 · 完整执行管道</p>
+      <div class="pipe-steps">
+
+        <div class="pipe-step active" id="ps1">
+          <div class="ps-num">1</div>
+          <div class="ps-content">
+            <div class="ps-name">XML/JSON 解析</div>
+            <div class="ps-desc">从模型输出中提取 tool_name, tool_id, input_params</div>
+            <div class="ps-tag tag-parse">PARSE</div>
+          </div>
+        </div>
+
+        <div class="pipe-step" id="ps2">
+          <div class="ps-num">2</div>
+          <div class="ps-content">
+            <div class="ps-name">权限检查</div>
+            <div class="ps-desc">Global → Project → Runtime 四级规则链<br>ALLOW / DENY / NEEDS_APPROVAL</div>
+            <div class="ps-tag tag-perm">PERMISSION</div>
+          </div>
+        </div>
+
+        <div class="pipe-step" id="ps3">
+          <div class="ps-num">3</div>
+          <div class="ps-content">
+            <div class="ps-name">PreToolUse Hook</div>
+            <div class="ps-desc">执行所有匹配的 PreToolUse 脚本<br>exit 2 → 阻止工具执行</div>
+            <div class="ps-tag tag-hook">HOOK</div>
+          </div>
+        </div>
+
+        <div class="pipe-step" id="ps4">
+          <div class="ps-num">4</div>
+          <div class="ps-content">
+            <div class="ps-name">工具执行</div>
+            <div class="ps-desc">路由到对应执行器（文件系统 / Shell / 网络 / Agent）<br>捕获 stdout, stderr, exit_code</div>
+            <div class="ps-tag tag-exec">EXECUTE</div>
+          </div>
+        </div>
+
+        <div class="pipe-step" id="ps5">
+          <div class="ps-num">5</div>
+          <div class="ps-content">
+            <div class="ps-name">PostToolUse Hook</div>
+            <div class="ps-desc">执行所有匹配的 PostToolUse 脚本<br>可读取 / 修改执行结果</div>
+            <div class="ps-tag tag-hook">HOOK</div>
+          </div>
+        </div>
+
+        <div class="pipe-step" id="ps6">
+          <div class="ps-num">6</div>
+          <div class="ps-content">
+            <div class="ps-name">生成 tool_result block</div>
+            <div class="ps-desc">包含 tool_use_id + content（文本 / 图片 / 错误）</div>
+            <div class="ps-tag tag-inject">INJECT</div>
+          </div>
+        </div>
+
+        <div class="pipe-step" id="ps7">
+          <div class="ps-num">7</div>
+          <div class="ps-content">
+            <div class="ps-name">注入对话历史</div>
+            <div class="ps-desc">messages.append(tool_result)<br>触发下一轮 claude_api() 推理</div>
+            <div class="ps-tag tag-inject">LOOP</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- BUBBLE CHART -->
+    <div class="bubble-section">
+      <p class="bubble-title">工具调用量分布</p>
+      <div class="bubbles">
+        <div class="bubble-row">
+          <span class="bubble-name">Read</span>
+          <div class="bubble-bar" style="width:100%;background:rgba(6,182,212,.3);">极高</div>
+        </div>
+        <div class="bubble-row">
+          <span class="bubble-name">Glob</span>
+          <div class="bubble-bar" style="width:82%;background:rgba(59,130,246,.3);">高</div>
+        </div>
+        <div class="bubble-row">
+          <span class="bubble-name">Grep</span>
+          <div class="bubble-bar" style="width:78%;background:rgba(59,130,246,.3);">高</div>
+        </div>
+        <div class="bubble-row">
+          <span class="bubble-name">Bash</span>
+          <div class="bubble-bar" style="width:70%;background:rgba(16,185,129,.3);">中高</div>
+        </div>
+        <div class="bubble-row">
+          <span class="bubble-name">Edit</span>
+          <div class="bubble-bar" style="width:65%;background:rgba(16,185,129,.3);">中高</div>
+        </div>
+        <div class="bubble-row">
+          <span class="bubble-name">Write</span>
+          <div class="bubble-bar" style="width:58%;background:rgba(139,92,246,.3);">中</div>
+        </div>
+        <div class="bubble-row">
+          <span class="bubble-name">Agent</span>
+          <div class="bubble-bar" style="width:42%;background:rgba(245,158,11,.3);">中</div>
+        </div>
+        <div class="bubble-row">
+          <span class="bubble-name">WebFetch</span>
+          <div class="bubble-bar" style="width:30%;background:rgba(245,158,11,.3);">低</div>
+        </div>
+        <div class="bubble-row">
+          <span class="bubble-name">WebSearch</span>
+          <div class="bubble-bar" style="width:18%;background:rgba(239,68,68,.3);">低</div>
+        </div>
+        <div class="bubble-row">
+          <span class="bubble-name">TodoWrite</span>
+          <div class="bubble-bar" style="width:12%;background:rgba(239,68,68,.25);">低</div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px; padding-top:16px; border-top:1px solid rgba(59,130,246,.1);">
+        <div style="font-size:11px; color:var(--muted); margin-bottom:8px; font-family:'JetBrains Mono',monospace;">Bash 特殊模式</div>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <div style="padding:8px 12px; border-radius:6px; background:rgba(16,185,129,.06); border:1px solid rgba(16,185,129,.15); font-size:11px; font-family:'JetBrains Mono',monospace; color:#34d399;">
+            run_in_background=True → 后台异步
+          </div>
+          <div style="padding:8px 12px; border-radius:6px; background:rgba(245,158,11,.06); border:1px solid rgba(245,158,11,.15); font-size:11px; font-family:'JetBrains Mono',monospace; color:#fbbf24;">
+            timeout=600000 → 最长 10 分钟
+          </div>
+          <div style="padding:8px 12px; border-radius:6px; background:rgba(239,68,68,.06); border:1px solid rgba(239,68,68,.15); font-size:11px; font-family:'JetBrains Mono',monospace; color:#f87171;">
+            curl | bash → 强制拒绝
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- TOOL CARDS -->
+  <div class="bottom-section">
+    <p class="section-title" style="margin-bottom:20px;">完整工具速查（45+）</p>
+    <div class="tools-grid">
+      <div class="tool-card"><div class="tc-name" style="color:#06b6d4;">Read</div><div class="tc-desc">读取文件，支持 PDF / 图片 / Jupyter</div><div class="tc-tag" style="color:#06b6d4;">文件 · 只读</div></div>
+      <div class="tool-card"><div class="tc-name" style="color:#06b6d4;">Write</div><div class="tc-desc">创建/覆盖文件，先 Read 再 Write</div><div class="tc-tag" style="color:#3b82f6;">文件 · 写入</div></div>
+      <div class="tool-card"><div class="tc-name" style="color:#06b6d4;">Edit</div><div class="tc-desc">精确字符串替换，old/new diff</div><div class="tc-tag" style="color:#3b82f6;">文件 · 修改</div></div>
+      <div class="tool-card"><div class="tc-name" style="color:#06b6d4;">Glob</div><div class="tc-desc">文件模式匹配，按修改时间排序</div><div class="tc-tag" style="color:#06b6d4;">文件 · 搜索</div></div>
+      <div class="tool-card"><div class="tc-name" style="color:#06b6d4;">Grep</div><div class="tc-desc">ripgrep 内容搜索，支持正则</div><div class="tc-tag" style="color:#06b6d4;">文件 · 搜索</div></div>
+      <div class="tool-card"><div class="tc-name" style="color:#10b981;">Bash</div><div class="tc-desc">执行 Shell 命令，后台/超时控制</div><div class="tc-tag" style="color:#10b981;">执行 · 全能</div></div>
+      <div class="tool-card"><div class="tc-name" style="color:#10b981;">TaskOutput</div><div class="tc-desc">获取后台任务输出，支持 block</div><div class="tc-tag" style="color:#10b981;">执行 · 异步</div></div>
+      <div class="tool-card"><div class="tc-name" style="color:#8b5cf6;">WebFetch</div><div class="tc-desc">抓取网页并 AI 提取，15min 缓存</div><div class="tc-tag" style="color:#8b5cf6;">网络 · 读取</div></div>
+      <div class="tool-card"><div class="tc-name" style="color:#8b5cf6;">WebSearch</div><div class="tc-desc">联网搜索，支持域名过滤</div><div class="tc-tag" style="color:#8b5cf6;">网络 · 搜索</div></div>
+      <div class="tool-card"><div class="tc-name" style="color:#f59e0b;">Agent</div><div class="tc-desc">启动子 Agent，独立上下文+worktree</div><div class="tc-tag" style="color:#f59e0b;">协作 · 并行</div></div>
+      <div class="tool-card"><div class="tc-name" style="color:#f59e0b;">SendMessage</div><div class="tc-desc">Agent 间直接通信，保留上下文</div><div class="tc-tag" style="color:#f59e0b;">协作 · 通信</div></div>
+      <div class="tool-card"><div class="tc-name" style="color:#ec4899;">AskUserQuestion</div><div class="tc-desc">向用户提问，含选项和预览</div><div class="tc-tag" style="color:#ec4899;">系统 · 交互</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Animate pipeline steps
+const steps = [1,2,3,4,5,6,7];
+let current = 0;
+function nextStep() {
+  steps.forEach(n => document.getElementById('ps'+n).classList.remove('active'));
+  current = (current % 7) + 1;
+  document.getElementById('ps'+current).classList.add('active');
+}
+setInterval(nextStep, 1200);
+</script>
+</body>
+</html>

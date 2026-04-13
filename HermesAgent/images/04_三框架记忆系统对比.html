@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>三框架记忆系统 · 横向对比</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #060610;
+  --cc: #3b82f6;
+  --oc: #10b981;
+  --hm: #8b5cf6;
+  --text: #e2e8f0;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family:'Space Grotesk',sans-serif;
+  background:var(--bg); color:var(--text); min-height:100vh;
+}
+body::before {
+  content:''; position:fixed; inset:0;
+  background:
+    radial-gradient(ellipse 60% 40% at 20% 50%, rgba(59,130,246,.07) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 40% at 80% 50%, rgba(139,92,246,.07) 0%, transparent 55%),
+    linear-gradient(rgba(255,255,255,.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.012) 1px, transparent 1px);
+  background-size:auto, auto, 50px 50px, 50px 50px;
+  z-index:0; pointer-events:none;
+}
+.page { position:relative; z-index:1; max-width:1400px; margin:0 auto; padding:48px 24px 80px; }
+
+.badge {
+  display:inline-flex; align-items:center; gap:8px;
+  border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04);
+  padding:5px 14px; border-radius:100px; font-size:11px;
+  color:#94a3b8; letter-spacing:.1em; text-transform:uppercase;
+  margin-bottom:20px; font-family:'JetBrains Mono',monospace;
+}
+h1 { font-size:clamp(32px,4.5vw,60px); font-weight:700; line-height:1.05; color:#fff; margin-bottom:10px; }
+.desc { color:#475569; font-size:15px; max-width:700px; margin-bottom:56px; line-height:1.7; }
+
+/* AGENT HEADER CHIPS */
+.agent-chips { display:flex; gap:16px; margin-bottom:40px; flex-wrap:wrap; }
+.agent-chip {
+  display:flex; align-items:center; gap:10px;
+  padding:10px 20px; border-radius:100px;
+  font-size:14px; font-weight:600;
+}
+.chip-cc { background:rgba(59,130,246,.12); border:1px solid rgba(59,130,246,.3); color:#60a5fa; }
+.chip-oc { background:rgba(16,185,129,.12); border:1px solid rgba(16,185,129,.3); color:#34d399; }
+.chip-hm { background:rgba(139,92,246,.12); border:1px solid rgba(139,92,246,.3); color:#a78bfa; }
+.chip-dot { width:8px; height:8px; border-radius:50%; }
+
+/* COMPARISON TABLE */
+.compare-table-wrap { overflow-x:auto; margin-bottom:56px; }
+table { width:100%; border-collapse:collapse; min-width:900px; }
+thead th {
+  padding:16px 20px; text-align:left;
+  font-family:'JetBrains Mono',monospace; font-size:11px;
+  letter-spacing:.08em; text-transform:uppercase;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+th.th-dim { color:#475569; }
+th.th-cc { color:#3b82f6; background:rgba(59,130,246,.05); border-radius:8px 8px 0 0; }
+th.th-oc { color:#10b981; background:rgba(16,185,129,.05); border-radius:8px 8px 0 0; }
+th.th-hm { color:#8b5cf6; background:rgba(139,92,246,.05); border-radius:8px 8px 0 0; }
+tbody tr { border-bottom:1px solid rgba(255,255,255,.04); transition:background .2s; }
+tbody tr:hover { background:rgba(255,255,255,.025); }
+tbody td { padding:14px 20px; font-size:13px; vertical-align:top; }
+td.td-dim { color:#475569; font-weight:600; font-size:12px; }
+td.td-cc { background:rgba(59,130,246,.03); }
+td.td-oc { background:rgba(16,185,129,.03); }
+td.td-hm { background:rgba(139,92,246,.03); }
+.cell-val { color:#e2e8f0; margin-bottom:3px; }
+.cell-sub { color:#475569; font-family:'JetBrains Mono',monospace; font-size:10px; }
+.tag-yes { color:#10b981; }
+.tag-no  { color:#475569; }
+.tag-partial { color:#f59e0b; }
+
+/* VISUAL COMPARISON BAR CHARTS */
+.bars-section { margin-bottom:56px; }
+.section-title { font-size:20px; font-weight:700; color:#94a3b8; margin-bottom:28px; }
+.bar-group { margin-bottom:28px; }
+.bar-label { font-size:13px; color:#94a3b8; margin-bottom:10px; font-weight:600; }
+.bars-row { display:flex; flex-direction:column; gap:8px; }
+.bar-row { display:flex; align-items:center; gap:12px; }
+.bar-agent { width:100px; font-size:11px; font-family:'JetBrains Mono',monospace; flex-shrink:0; }
+.bar-agent.cc { color:#60a5fa; }
+.bar-agent.oc { color:#34d399; }
+.bar-agent.hm { color:#a78bfa; }
+.bar-track { flex:1; height:10px; background:rgba(255,255,255,.06); border-radius:5px; overflow:hidden; }
+.bar-fill { height:100%; border-radius:5px; position:relative; }
+.bar-fill.cc { background:linear-gradient(90deg,#1d4ed8,#3b82f6); }
+.bar-fill.oc { background:linear-gradient(90deg,#059669,#10b981); }
+.bar-fill.hm { background:linear-gradient(90deg,#6d28d9,#8b5cf6); }
+.bar-num { font-family:'JetBrains Mono',monospace; font-size:11px; width:35px; text-align:right; }
+
+/* MEMORY FLOW SVG */
+.flow-section { margin-bottom:56px; }
+.flow-container {
+  background:rgba(255,255,255,.02); border:1px solid rgba(255,255,255,.06);
+  border-radius:20px; padding:36px; overflow-x:auto;
+}
+
+/* DECISION GUIDE */
+.decision-section { margin-bottom:56px; }
+.decision-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
+@media(max-width:900px){ .decision-grid{grid-template-columns:1fr} }
+.decision-card {
+  border-radius:20px; padding:28px; position:relative; overflow:hidden;
+  transition:transform .3s, box-shadow .3s;
+}
+.decision-card:hover { transform:translateY(-6px); }
+.decision-card.cc {
+  background:linear-gradient(135deg,rgba(29,78,216,.15) 0%, rgba(59,130,246,.08) 100%);
+  border:1px solid rgba(59,130,246,.25);
+}
+.decision-card.oc {
+  background:linear-gradient(135deg,rgba(5,150,105,.15) 0%, rgba(16,185,129,.08) 100%);
+  border:1px solid rgba(16,185,129,.25);
+}
+.decision-card.hm {
+  background:linear-gradient(135deg,rgba(109,40,217,.15) 0%, rgba(139,92,246,.08) 100%);
+  border:1px solid rgba(139,92,246,.25);
+}
+.dc-title { font-size:18px; font-weight:700; margin-bottom:6px; }
+.dc-subtitle { font-size:12px; font-family:'JetBrains Mono',monospace; margin-bottom:16px; opacity:.6; }
+.dc-who { font-size:13px; color:#94a3b8; margin-bottom:12px; line-height:1.6; }
+.dc-points { list-style:none; }
+.dc-points li { font-size:12px; padding:5px 0; border-bottom:1px solid rgba(255,255,255,.04); color:#64748b; }
+.dc-points li::before { margin-right:6px; }
+.cc .dc-points li::before { content:'▸'; color:#3b82f6; }
+.oc .dc-points li::before { content:'▸'; color:#10b981; }
+.hm .dc-points li::before { content:'▸'; color:#8b5cf6; }
+
+footer { color:#1e293b; font-size:12px; text-align:center; font-family:'JetBrains Mono',monospace; padding-top:32px; border-top:1px solid rgba(255,255,255,.05); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="badge">🔬 MEMORY SYSTEMS COMPARISON</div>
+  <h1>三框架记忆系统<br>横向对比</h1>
+  <p class="desc">Claude Code · OpenClaw · Hermes Agent — 三种不同的记忆架构哲学，从工程级多代理编排到心跳驱动的个人助理，再到自我进化的智能体，各有所长。</p>
+
+  <!-- AGENT CHIPS -->
+  <div class="agent-chips">
+    <div class="agent-chip chip-cc"><span class="chip-dot" style="background:#3b82f6"></span>Claude Code — 多 Agent 工程编排</div>
+    <div class="agent-chip chip-oc"><span class="chip-dot" style="background:#10b981"></span>OpenClaw — 心跳驱动个人助理</div>
+    <div class="agent-chip chip-hm"><span class="chip-dot" style="background:#8b5cf6"></span>Hermes Agent — 四层自进化</div>
+  </div>
+
+  <!-- COMPARISON TABLE -->
+  <div class="compare-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="th-dim" style="width:160px">对比维度</th>
+          <th class="th-cc">🔵 Claude Code</th>
+          <th class="th-oc">🟢 OpenClaw</th>
+          <th class="th-hm">🟣 Hermes Agent</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="td-dim">架构模式</td>
+          <td class="td-cc"><div class="cell-val">多 Agent 编排</div><div class="cell-sub">Coordinator + N Sub-Agents</div></td>
+          <td class="td-oc"><div class="cell-val">单 Agent 持久循环</div><div class="cell-sub">Heartbeat 心跳驱动</div></td>
+          <td class="td-hm"><div class="cell-val">单 Agent 自进化</div><div class="cell-sub">四层记忆 + Periodic Nudge</div></td>
+        </tr>
+        <tr>
+          <td class="td-dim">记忆层数</td>
+          <td class="td-cc"><div class="cell-val">4 层</div><div class="cell-sub">CLAUDE.md / User / Session / Team</div></td>
+          <td class="td-oc"><div class="cell-val">4 层</div><div class="cell-sub">agent.md / memory.md / SQLite / Skill</div></td>
+          <td class="td-hm"><div class="cell-val">4 层</div><div class="cell-sub">Prompt / Session / Skills / Honcho</div></td>
+        </tr>
+        <tr>
+          <td class="td-dim">记忆持久化</td>
+          <td class="td-cc"><div class="cell-val tag-yes">✓ Git / 文件系统</div><div class="cell-sub">CLAUDE.md 跨会话</div></td>
+          <td class="td-oc"><div class="cell-val tag-yes">✓ Markdown + SQLite</div><div class="cell-sub">memory.md 主动维护</div></td>
+          <td class="td-hm"><div class="cell-val tag-yes">✓ SQLite FTS5 + 向量</div><div class="cell-sub">跨会话语义检索</div></td>
+        </tr>
+        <tr>
+          <td class="td-dim">技能/工具学习</td>
+          <td class="td-cc"><div class="cell-val tag-no">✗ 手动编写 SKILL.md</div><div class="cell-sub">人工维护，不自动蒸馏</div></td>
+          <td class="td-oc"><div class="cell-val tag-yes">✓ 自动蒸馏</div><div class="cell-sub">任务后自动提取 Skill</div></td>
+          <td class="td-hm"><div class="cell-val tag-yes">✓ 自动蒸馏</div><div class="cell-sub">YAML 格式，复用优先</div></td>
+        </tr>
+        <tr>
+          <td class="td-dim">用户建模</td>
+          <td class="td-cc"><div class="cell-val tag-no">✗ 无</div><div class="cell-sub">无个性化用户画像</div></td>
+          <td class="td-oc"><div class="cell-val tag-partial">△ 隐式</div><div class="cell-sub">memory.md 记录偏好</div></td>
+          <td class="td-hm"><div class="cell-val tag-yes">✓ Honcho 显式建模</div><div class="cell-sub">动态用户画像，个性化适配</div></td>
+        </tr>
+        <tr>
+          <td class="td-dim">心跳/唤醒</td>
+          <td class="td-cc"><div class="cell-val tag-no">✗ 无</div><div class="cell-sub">按需调用，无主动行为</div></td>
+          <td class="td-oc"><div class="cell-val tag-yes">✓ 每小时心跳</div><div class="cell-sub">heartbeat.md 主动自检</div></td>
+          <td class="td-hm"><div class="cell-val tag-yes">✓ Periodic Nudge</div><div class="cell-sub">每 N 轮注入记忆刷新</div></td>
+        </tr>
+        <tr>
+          <td class="td-dim">多 Agent 协作</td>
+          <td class="td-cc"><div class="cell-val tag-yes">✓ 核心能力</div><div class="cell-sub">Git Worktree 隔离沙箱</div></td>
+          <td class="td-oc"><div class="cell-val tag-no">✗ 无</div><div class="cell-sub">单 Agent 架构</div></td>
+          <td class="td-hm"><div class="cell-val tag-no">✗ 无</div><div class="cell-sub">单 Agent 架构</div></td>
+        </tr>
+        <tr>
+          <td class="td-dim">IM 集成</td>
+          <td class="td-cc"><div class="cell-val tag-no">✗ 无</div><div class="cell-sub">CLI 端侧运行</div></td>
+          <td class="td-oc"><div class="cell-val tag-yes">✓ 全平台</div><div class="cell-sub">WhatsApp/Discord/Telegram</div></td>
+          <td class="td-hm"><div class="cell-val tag-partial">△ 有限</div><div class="cell-sub">主要通过 CLI/API</div></td>
+        </tr>
+        <tr>
+          <td class="td-dim">部署成本</td>
+          <td class="td-cc"><div class="cell-val">本地/企业</div><div class="cell-sub">API 调用计费，按量付费</div></td>
+          <td class="td-oc"><div class="cell-val tag-yes">$5/月 VPS</div><div class="cell-sub">极低成本，自托管</div></td>
+          <td class="td-hm"><div class="cell-val tag-yes">$5/月 VPS</div><div class="cell-sub">Ollama 本地推理</div></td>
+        </tr>
+        <tr>
+          <td class="td-dim">开源协议</td>
+          <td class="td-cc"><div class="cell-val tag-no">✗ 闭源</div><div class="cell-sub">Anthropic 官方商业产品</div></td>
+          <td class="td-oc"><div class="cell-val tag-yes">✓ Apache 2.0</div><div class="cell-sub">Peter Steinberger 主导</div></td>
+          <td class="td-hm"><div class="cell-val tag-yes">✓ MIT + 模型权重</div><div class="cell-sub">Nous Research 开源</div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- BAR CHART COMPARISON -->
+  <div class="bars-section">
+    <div class="section-title">核心能力雷达</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:40px;">
+      <div>
+        <div class="bar-group">
+          <div class="bar-label">代码工程能力</div>
+          <div class="bars-row">
+            <div class="bar-row"><span class="bar-agent cc">Claude Code</span><div class="bar-track"><div class="bar-fill cc" style="width:96%"></div></div><span class="bar-num" style="color:#60a5fa">96%</span></div>
+            <div class="bar-row"><span class="bar-agent oc">OpenClaw</span><div class="bar-track"><div class="bar-fill oc" style="width:38%"></div></div><span class="bar-num" style="color:#34d399">38%</span></div>
+            <div class="bar-row"><span class="bar-agent hm">Hermes</span><div class="bar-track"><div class="bar-fill hm" style="width:55%"></div></div><span class="bar-num" style="color:#a78bfa">55%</span></div>
+          </div>
+        </div>
+        <div class="bar-group">
+          <div class="bar-label">记忆持久化深度</div>
+          <div class="bars-row">
+            <div class="bar-row"><span class="bar-agent cc">Claude Code</span><div class="bar-track"><div class="bar-fill cc" style="width:70%"></div></div><span class="bar-num" style="color:#60a5fa">70%</span></div>
+            <div class="bar-row"><span class="bar-agent oc">OpenClaw</span><div class="bar-track"><div class="bar-fill oc" style="width:78%"></div></div><span class="bar-num" style="color:#34d399">78%</span></div>
+            <div class="bar-row"><span class="bar-agent hm">Hermes</span><div class="bar-track"><div class="bar-fill hm" style="width:94%"></div></div><span class="bar-num" style="color:#a78bfa">94%</span></div>
+          </div>
+        </div>
+        <div class="bar-group">
+          <div class="bar-label">自主进化能力</div>
+          <div class="bars-row">
+            <div class="bar-row"><span class="bar-agent cc">Claude Code</span><div class="bar-track"><div class="bar-fill cc" style="width:20%"></div></div><span class="bar-num" style="color:#60a5fa">20%</span></div>
+            <div class="bar-row"><span class="bar-agent oc">OpenClaw</span><div class="bar-track"><div class="bar-fill oc" style="width:72%"></div></div><span class="bar-num" style="color:#34d399">72%</span></div>
+            <div class="bar-row"><span class="bar-agent hm">Hermes</span><div class="bar-track"><div class="bar-fill hm" style="width:92%"></div></div><span class="bar-num" style="color:#a78bfa">92%</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="bar-group">
+          <div class="bar-label">个性化适配</div>
+          <div class="bars-row">
+            <div class="bar-row"><span class="bar-agent cc">Claude Code</span><div class="bar-track"><div class="bar-fill cc" style="width:30%"></div></div><span class="bar-num" style="color:#60a5fa">30%</span></div>
+            <div class="bar-row"><span class="bar-agent oc">OpenClaw</span><div class="bar-track"><div class="bar-fill oc" style="width:60%"></div></div><span class="bar-num" style="color:#34d399">60%</span></div>
+            <div class="bar-row"><span class="bar-agent hm">Hermes</span><div class="bar-track"><div class="bar-fill hm" style="width:90%"></div></div><span class="bar-num" style="color:#a78bfa">90%</span></div>
+          </div>
+        </div>
+        <div class="bar-group">
+          <div class="bar-label">多任务并行</div>
+          <div class="bars-row">
+            <div class="bar-row"><span class="bar-agent cc">Claude Code</span><div class="bar-track"><div class="bar-fill cc" style="width:95%"></div></div><span class="bar-num" style="color:#60a5fa">95%</span></div>
+            <div class="bar-row"><span class="bar-agent oc">OpenClaw</span><div class="bar-track"><div class="bar-fill oc" style="width:25%"></div></div><span class="bar-num" style="color:#34d399">25%</span></div>
+            <div class="bar-row"><span class="bar-agent hm">Hermes</span><div class="bar-track"><div class="bar-fill hm" style="width:25%"></div></div><span class="bar-num" style="color:#a78bfa">25%</span></div>
+          </div>
+        </div>
+        <div class="bar-group">
+          <div class="bar-label">部署便利性</div>
+          <div class="bars-row">
+            <div class="bar-row"><span class="bar-agent cc">Claude Code</span><div class="bar-track"><div class="bar-fill cc" style="width:88%"></div></div><span class="bar-num" style="color:#60a5fa">88%</span></div>
+            <div class="bar-row"><span class="bar-agent oc">OpenClaw</span><div class="bar-track"><div class="bar-fill oc" style="width:82%"></div></div><span class="bar-num" style="color:#34d399">82%</span></div>
+            <div class="bar-row"><span class="bar-agent hm">Hermes</span><div class="bar-track"><div class="bar-fill hm" style="width:75%"></div></div><span class="bar-num" style="color:#a78bfa">75%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MEMORY FLOW VISUAL -->
+  <div class="flow-section">
+    <div class="section-title">记忆架构流程对比</div>
+    <div class="flow-container">
+      <svg width="100%" viewBox="0 0 1100 280" fill="none" xmlns="http://www.w3.org/2000/svg" style="min-width:800px">
+        <defs>
+          <marker id="fa" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+            <path d="M0,0 L0,5 L7,2.5 z" fill="#475569"/>
+          </marker>
+          <style>
+            .mf { stroke-dasharray:6,4; animation:mfAnim 2s linear infinite; }
+            @keyframes mfAnim { to { stroke-dashoffset:-20; } }
+          </style>
+        </defs>
+
+        <!-- === CLAUDE CODE === -->
+        <text x="175" y="28" text-anchor="middle" fill="#3b82f6" font-family="Space Grotesk" font-size="14" font-weight="700">Claude Code</text>
+        <!-- Input -->
+        <rect x="20" y="45" width="70" height="32" rx="6" fill="rgba(59,130,246,.15)" stroke="rgba(59,130,246,.4)" stroke-width="1"/>
+        <text x="55" y="65" text-anchor="middle" fill="#60a5fa" font-family="JetBrains Mono" font-size="10">输入</text>
+        <line x1="92" y1="61" x2="118" y2="61" stroke="#3b82f6" stroke-width="1.5" class="mf" marker-end="url(#fa)"/>
+        <!-- Coordinator -->
+        <rect x="120" y="40" width="110" height="42" rx="8" fill="rgba(29,78,216,.4)" stroke="rgba(59,130,246,.5)" stroke-width="1.5"/>
+        <text x="175" y="59" text-anchor="middle" fill="#93c5fd" font-family="Space Grotesk" font-size="11" font-weight="700">Coordinator</text>
+        <text x="175" y="74" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="9">CLAUDE.md + Rules</text>
+        <!-- Split arrows -->
+        <line x1="175" y1="84" x2="90" y2="130" stroke="#1d4ed8" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#fa)"/>
+        <line x1="175" y1="84" x2="175" y2="130" stroke="#1d4ed8" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#fa)"/>
+        <line x1="175" y1="84" x2="260" y2="130" stroke="#1d4ed8" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#fa)"/>
+        <!-- Sub agents -->
+        <rect x="40" y="132" width="100" height="28" rx="6" fill="rgba(30,58,138,.4)" stroke="rgba(59,130,246,.3)" stroke-width="1"/>
+        <text x="90" y="150" text-anchor="middle" fill="#93c5fd" font-family="JetBrains Mono" font-size="9">Sub-Agent 1</text>
+        <rect x="125" y="132" width="100" height="28" rx="6" fill="rgba(30,58,138,.4)" stroke="rgba(59,130,246,.3)" stroke-width="1"/>
+        <text x="175" y="150" text-anchor="middle" fill="#93c5fd" font-family="JetBrains Mono" font-size="9">Sub-Agent 2</text>
+        <rect x="210" y="132" width="100" height="28" rx="6" fill="rgba(30,58,138,.4)" stroke="rgba(59,130,246,.3)" stroke-width="1"/>
+        <text x="260" y="150" text-anchor="middle" fill="#93c5fd" font-family="JetBrains Mono" font-size="9">Sub-Agent 3</text>
+        <!-- Worktree label -->
+        <text x="175" y="184" text-anchor="middle" fill="#1e40af" font-family="JetBrains Mono" font-size="9">Git Worktree 隔离</text>
+        <!-- Output -->
+        <rect x="120" y="195" width="110" height="28" rx="6" fill="rgba(16,185,129,.1)" stroke="rgba(16,185,129,.3)" stroke-width="1"/>
+        <text x="175" y="213" text-anchor="middle" fill="#34d399" font-family="JetBrains Mono" font-size="9">汇总 · 审批 · 输出</text>
+
+        <!-- === OPENCLAW === -->
+        <text x="555" y="28" text-anchor="middle" fill="#10b981" font-family="Space Grotesk" font-size="14" font-weight="700">OpenClaw</text>
+        <rect x="400" y="45" width="70" height="32" rx="6" fill="rgba(16,185,129,.15)" stroke="rgba(16,185,129,.4)" stroke-width="1"/>
+        <text x="435" y="65" text-anchor="middle" fill="#34d399" font-family="JetBrains Mono" font-size="10">IM 输入</text>
+        <line x1="472" y1="61" x2="498" y2="61" stroke="#10b981" stroke-width="1.5" class="mf" marker-end="url(#fa)"/>
+        <!-- Main Loop -->
+        <rect x="500" y="40" width="110" height="42" rx="8" fill="rgba(5,150,105,.3)" stroke="rgba(16,185,129,.5)" stroke-width="1.5"/>
+        <text x="555" y="59" text-anchor="middle" fill="#6ee7b7" font-family="Space Grotesk" font-size="11" font-weight="700">Single Agent</text>
+        <text x="555" y="74" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="9">agent.md + loop</text>
+        <!-- Heartbeat -->
+        <rect x="400" y="108" width="90" height="28" rx="6" fill="rgba(16,185,129,.1)" stroke="rgba(16,185,129,.3)" stroke-width="1"/>
+        <text x="445" y="126" text-anchor="middle" fill="#34d399" font-family="JetBrains Mono" font-size="9">⏰ Heartbeat/1h</text>
+        <line x1="500" y1="61" x2="492" y2="108" stroke="#059669" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#fa)"/>
+        <!-- Memory layers -->
+        <rect x="500" y="108" width="78" height="26" rx="5" fill="rgba(16,185,129,.08)" stroke="rgba(16,185,129,.2)" stroke-width="1"/>
+        <text x="539" y="124" text-anchor="middle" fill="#6ee7b7" font-family="JetBrains Mono" font-size="9">memory.md</text>
+        <rect x="582" y="108" width="78" height="26" rx="5" fill="rgba(245,158,11,.08)" stroke="rgba(245,158,11,.2)" stroke-width="1"/>
+        <text x="621" y="124" text-anchor="middle" fill="#fcd34d" font-family="JetBrains Mono" font-size="9">SQLite</text>
+        <!-- Skills -->
+        <rect x="500" y="142" width="160" height="26" rx="5" fill="rgba(139,92,246,.08)" stroke="rgba(139,92,246,.2)" stroke-width="1"/>
+        <text x="580" y="158" text-anchor="middle" fill="#c4b5fd" font-family="JetBrains Mono" font-size="9">Skills 自动蒸馏</text>
+        <!-- Output -->
+        <rect x="500" y="195" width="110" height="28" rx="6" fill="rgba(16,185,129,.1)" stroke="rgba(16,185,129,.3)" stroke-width="1"/>
+        <text x="555" y="213" text-anchor="middle" fill="#34d399" font-family="JetBrains Mono" font-size="9">IM 回复 · 执行动作</text>
+
+        <!-- === HERMES === -->
+        <text x="940" y="28" text-anchor="middle" fill="#8b5cf6" font-family="Space Grotesk" font-size="14" font-weight="700">Hermes Agent</text>
+        <rect x="785" y="45" width="70" height="32" rx="6" fill="rgba(139,92,246,.15)" stroke="rgba(139,92,246,.4)" stroke-width="1"/>
+        <text x="820" y="65" text-anchor="middle" fill="#a78bfa" font-family="JetBrains Mono" font-size="10">输入</text>
+        <line x1="857" y1="61" x2="883" y2="61" stroke="#8b5cf6" stroke-width="1.5" class="mf" marker-end="url(#fa)"/>
+        <!-- Core -->
+        <rect x="885" y="40" width="110" height="42" rx="8" fill="rgba(109,40,217,.3)" stroke="rgba(139,92,246,.5)" stroke-width="1.5"/>
+        <text x="940" y="59" text-anchor="middle" fill="#c4b5fd" font-family="Space Grotesk" font-size="11" font-weight="700">Hermes Core</text>
+        <text x="940" y="74" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="9">3575 Prompt + Nudge</text>
+        <!-- Memory layers -->
+        <rect x="785" y="108" width="78" height="26" rx="5" fill="rgba(139,92,246,.1)" stroke="rgba(139,92,246,.25)" stroke-width="1"/>
+        <text x="824" y="124" text-anchor="middle" fill="#c4b5fd" font-family="JetBrains Mono" font-size="9">SQLite FTS5</text>
+        <rect x="867" y="108" width="78" height="26" rx="5" fill="rgba(245,158,11,.08)" stroke="rgba(245,158,11,.2)" stroke-width="1"/>
+        <text x="906" y="124" text-anchor="middle" fill="#fcd34d" font-family="JetBrains Mono" font-size="9">Skills YAML</text>
+        <rect x="949" y="108" width="78" height="26" rx="5" fill="rgba(16,185,129,.08)" stroke="rgba(16,185,129,.2)" stroke-width="1"/>
+        <text x="988" y="124" text-anchor="middle" fill="#34d399" font-family="JetBrains Mono" font-size="9">Honcho</text>
+        <!-- Nudge -->
+        <rect x="785" y="142" width="160" height="26" rx="5" fill="rgba(139,92,246,.08)" stroke="rgba(139,92,246,.2)" stroke-width="1"/>
+        <text x="865" y="158" text-anchor="middle" fill="#a78bfa" font-family="JetBrains Mono" font-size="9">Periodic Nudge 唤醒</text>
+        <!-- Skill distill -->
+        <rect x="949" y="142" width="78" height="26" rx="5" fill="rgba(109,40,217,.1)" stroke="rgba(109,40,217,.3)" stroke-width="1"/>
+        <text x="988" y="158" text-anchor="middle" fill="#c4b5fd" font-family="JetBrains Mono" font-size="9">Skill 蒸馏</text>
+        <!-- Output -->
+        <rect x="885" y="195" width="110" height="28" rx="6" fill="rgba(139,92,246,.1)" stroke="rgba(139,92,246,.3)" stroke-width="1"/>
+        <text x="940" y="213" text-anchor="middle" fill="#a78bfa" font-family="JetBrains Mono" font-size="9">结构化输出 · 进化</text>
+
+        <!-- Connecting arrows to memory layers -->
+        <line x1="940" y1="84" x2="855" y2="106" stroke="#6d28d9" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#fa)"/>
+        <line x1="940" y1="84" x2="906" y2="106" stroke="#6d28d9" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#fa)"/>
+        <line x1="940" y1="84" x2="988" y2="106" stroke="#6d28d9" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#fa)"/>
+
+        <!-- Dividers -->
+        <line x1="368" y1="10" x2="368" y2="250" stroke="rgba(255,255,255,.05)" stroke-width="1" stroke-dasharray="4,4"/>
+        <line x1="752" y1="10" x2="752" y2="250" stroke="rgba(255,255,255,.05)" stroke-width="1" stroke-dasharray="4,4"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- DECISION GUIDE -->
+  <div class="decision-section">
+    <div class="section-title">选型决策指南</div>
+    <div class="decision-grid">
+      <div class="decision-card cc">
+        <div class="dc-title" style="color:#60a5fa">🔵 选 Claude Code</div>
+        <div class="dc-subtitle">工程级代码开发场景</div>
+        <div class="dc-who">你是专业开发者，需要 AI 帮助完成复杂的软件工程任务，对代码质量和工程规范有严格要求。</div>
+        <ul class="dc-points">
+          <li>大型代码库重构、多文件联动开发</li>
+          <li>需要并行执行多个子任务</li>
+          <li>要求企业级权限审批和安全合规</li>
+          <li>重度依赖 MCP 生态和 Computer Use</li>
+        </ul>
+      </div>
+      <div class="decision-card oc">
+        <div class="dc-title" style="color:#34d399">🟢 选 OpenClaw</div>
+        <div class="dc-subtitle">全天候个人 AI 助理场景</div>
+        <div class="dc-who">你需要一个能通过 WhatsApp/Telegram 随时联系、24小时在线、会主动"心跳"自检的个人 AI。</div>
+        <ul class="dc-points">
+          <li>需要 IM 平台（WhatsApp/Discord）集成</li>
+          <li>希望 Agent 每小时自动检查任务状态</li>
+          <li>预算极低，$5 VPS 可满足需求</li>
+          <li>需要跨会话持久记忆的个人助理</li>
+        </ul>
+      </div>
+      <div class="decision-card hm">
+        <div class="dc-title" style="color:#a78bfa">🟣 选 Hermes Agent</div>
+        <div class="dc-subtitle">自进化智能体研究场景</div>
+        <div class="dc-who">你关注 Agent 的自我进化能力和个性化适配，希望 Agent 越用越懂你，且完全本地私有化部署。</div>
+        <ul class="dc-points">
+          <li>重视 Agent 个性化和用户建模能力</li>
+          <li>希望 Agent 自动从经验中学习（Skill 蒸馏）</li>
+          <li>需要本地 Ollama 推理，数据完全私有</li>
+          <li>AI Agent 研究者，关注自进化架构</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    三框架记忆系统横向对比 · VibeBloging Architecture Series 2026<br>
+    <span style="opacity:.4">Claude Code v2.1.88 · OpenClaw (Clawdbot) · Hermes Agent v0.7.0</span>
+  </footer>
+</div>
+</body>
+</html>

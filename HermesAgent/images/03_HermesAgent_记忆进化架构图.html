@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hermes Agent · 记忆进化架构图</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #07030f;
+  --hm: #8b5cf6;
+  --hm-light: #a78bfa;
+  --hm-dim: #2d1a5e;
+  --text: #e2e8f0;
+  --muted: #4b4565;
+  --glass: rgba(139,92,246,.06);
+  --glass-border: rgba(139,92,246,.22);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Space Grotesk', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height:100vh;
+}
+body::before {
+  content:'';
+  position:fixed; inset:0;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(139,92,246,.18) 0%, transparent 60%),
+    linear-gradient(rgba(139,92,246,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139,92,246,.025) 1px, transparent 1px);
+  background-size: auto, 50px 50px, 50px 50px;
+  z-index:0; pointer-events:none;
+}
+.page { position:relative; z-index:1; max-width:1360px; margin:0 auto; padding:40px 24px 80px; }
+
+/* BADGE */
+.badge {
+  display:inline-flex; align-items:center; gap:8px;
+  border:1px solid rgba(139,92,246,.3); background:rgba(139,92,246,.08);
+  padding:5px 14px; border-radius:100px; font-size:11px;
+  color:var(--hm-light); letter-spacing:.1em; text-transform:uppercase;
+  margin-bottom:20px; font-family:'JetBrains Mono',monospace;
+}
+h1 {
+  font-size: clamp(36px, 5vw, 66px); font-weight:700; line-height:1.05;
+  color:#fff; margin-bottom:12px;
+}
+h1 span { color:var(--hm); }
+.desc { color:#5c5475; font-size:16px; max-width:720px; margin-bottom:56px; line-height:1.7; }
+
+/* SELF-EVOLUTION BANNER */
+.evolution-banner {
+  display:flex; align-items:center; justify-content:center; gap:16px;
+  background: linear-gradient(90deg, rgba(139,92,246,.08) 0%, rgba(139,92,246,.18) 50%, rgba(139,92,246,.08) 100%);
+  border:1px solid rgba(139,92,246,.3);
+  border-radius:16px; padding:18px 32px; margin-bottom:48px;
+  position:relative; overflow:hidden;
+}
+.evolution-banner::before {
+  content:'';
+  position:absolute; inset:0;
+  background: linear-gradient(90deg, transparent 0%, rgba(139,92,246,.25) 50%, transparent 100%);
+  animation: bannerSweep 3s ease-in-out infinite;
+}
+@keyframes bannerSweep { 0%,100%{transform:translateX(-100%)} 50%{transform:translateX(100%)} }
+.evolution-label {
+  font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--hm-light);
+  letter-spacing:.08em;
+}
+.evolution-arrow {
+  font-size:20px; color:var(--hm);
+  animation: arrowPulse 1.5s ease-in-out infinite;
+}
+@keyframes arrowPulse { 0%,100%{opacity:.4;transform:scale(.9)} 50%{opacity:1;transform:scale(1.1)} }
+
+/* MAIN SVG */
+.arch-container {
+  background: rgba(139,92,246,.03);
+  border: 1px solid rgba(139,92,246,.12);
+  border-radius: 24px;
+  padding: 40px;
+  margin-bottom: 48px;
+  overflow-x: auto;
+}
+.arch-svg { width:100%; min-width:960px; }
+
+/* 4-LAYER MEMORY */
+.memory-section { margin-bottom:48px; }
+.section-title { font-size:20px; font-weight:700; color:var(--hm-light); margin-bottom:24px; }
+.memory-layers { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; }
+@media(max-width:700px){ .memory-layers{grid-template-columns:1fr} }
+.mem-card {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius:16px; padding:24px;
+  position:relative; overflow:hidden;
+  transition: all .3s;
+  cursor:default;
+}
+.mem-card::before {
+  content:''; position:absolute; left:0; top:0; bottom:0; width:4px;
+  border-radius:4px 0 0 4px;
+}
+.mem-card:nth-child(1)::before { background: #8b5cf6; }
+.mem-card:nth-child(2)::before { background: #06b6d4; }
+.mem-card:nth-child(3)::before { background: #f59e0b; }
+.mem-card:nth-child(4)::before { background: #10b981; }
+.mem-card:hover {
+  background: rgba(139,92,246,.12);
+  transform: translateY(-4px);
+  box-shadow: 0 16px 40px rgba(139,92,246,.2);
+}
+.mem-layer-num {
+  font-family:'JetBrains Mono',monospace; font-size:11px;
+  color:var(--hm); letter-spacing:.1em; text-transform:uppercase;
+  margin-bottom:8px;
+}
+.mem-name { font-size:17px; font-weight:700; color:#fff; margin-bottom:6px; }
+.mem-size { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--hm); margin-bottom:10px; }
+.mem-desc { font-size:13px; color:#64748b; line-height:1.6; }
+.mem-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+.mem-tag {
+  padding:3px 8px; border-radius:6px; font-size:10px;
+  background:rgba(139,92,246,.15); color:var(--hm-light);
+  font-family:'JetBrains Mono',monospace;
+}
+
+/* SKILL DISTILLATION */
+.distill-section { margin-bottom:48px; }
+.distill-pipeline {
+  background: rgba(139,92,246,.03);
+  border: 1px solid rgba(139,92,246,.12);
+  border-radius:20px; padding:32px; overflow-x:auto;
+}
+.pipeline-svg { width:100%; min-width:700px; }
+
+/* NUDGE MECHANISM */
+.nudge-section { margin-bottom:48px; }
+.nudge-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+@media(max-width:800px){ .nudge-cards{grid-template-columns:1fr} }
+.nudge-card {
+  background:rgba(139,92,246,.05); border:1px solid rgba(139,92,246,.15);
+  border-radius:14px; padding:20px; text-align:center; transition:all .3s;
+}
+.nudge-card:hover {
+  background:rgba(139,92,246,.12); border-color:rgba(139,92,246,.4);
+  transform:translateY(-4px); box-shadow:0 12px 30px rgba(139,92,246,.15);
+}
+.nudge-icon { font-size:28px; margin-bottom:10px; }
+.nudge-name { font-size:14px; font-weight:700; color:var(--hm-light); margin-bottom:6px; }
+.nudge-desc { font-size:12px; color:#64748b; line-height:1.5; }
+
+/* FEATURES GRID */
+.features-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-bottom:48px; }
+@media(max-width:900px){ .features-grid{grid-template-columns:1fr 1fr} }
+@media(max-width:600px){ .features-grid{grid-template-columns:1fr} }
+.feature-card {
+  background:rgba(139,92,246,.05); border:1px solid rgba(139,92,246,.15);
+  border-radius:16px; padding:22px; transition:all .3s;
+}
+.feature-card:hover {
+  background:rgba(139,92,246,.1); border-color:rgba(139,92,246,.4);
+  transform:translateY(-4px); box-shadow:0 12px 40px rgba(139,92,246,.15);
+}
+.feature-icon { font-size:26px; margin-bottom:10px; }
+.feature-name { font-size:14px; font-weight:700; color:var(--hm-light); margin-bottom:7px; }
+.feature-desc { font-size:12px; color:#64748b; line-height:1.6; }
+
+/* TECH STACK */
+.tech-row { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:48px; }
+.tech-chip {
+  padding:7px 14px; border-radius:100px;
+  background: rgba(139,92,246,.1); border:1px solid rgba(139,92,246,.25);
+  color:var(--hm-light); font-family:'JetBrains Mono',monospace; font-size:11px;
+  transition:all .2s;
+}
+.tech-chip:hover { background:rgba(139,92,246,.2); transform:scale(1.05); }
+
+/* HONCHO SECTION */
+.honcho-box {
+  background: linear-gradient(135deg, rgba(139,92,246,.08) 0%, rgba(6,182,212,.06) 100%);
+  border: 1px solid rgba(139,92,246,.25);
+  border-radius:20px; padding:32px; margin-bottom:48px;
+  display:grid; grid-template-columns:1fr 1fr; gap:32px;
+}
+@media(max-width:700px){ .honcho-box{grid-template-columns:1fr} }
+.honcho-title { font-size:18px; font-weight:700; color:var(--hm-light); margin-bottom:12px; }
+.honcho-desc { font-size:13px; color:#64748b; line-height:1.7; }
+.honcho-metric { margin-top:20px; }
+.hm-row { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+.hm-label { font-size:12px; color:#a78bfa; width:120px; flex-shrink:0; }
+.hm-bar-bg { flex:1; height:6px; background:rgba(139,92,246,.15); border-radius:3px; overflow:hidden; }
+.hm-bar { height:100%; background: linear-gradient(90deg,#8b5cf6,#a78bfa); border-radius:3px; }
+.hm-val { font-family:'JetBrains Mono',monospace; font-size:11px; color:#8b5cf6; width:40px; text-align:right; }
+
+footer { color:#2d2847; font-size:12px; text-align:center; font-family:'JetBrains Mono',monospace; padding-top:32px; border-top:1px solid rgba(139,92,246,.1); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="badge">🧬 SELF-EVOLVING ARCHITECTURE</div>
+  <h1>Hermes Agent<br><span>记忆进化</span>架构</h1>
+  <p class="desc">Nous Research 打造的自进化智能体。四层记忆分级调度，Skill 自动蒸馏沉淀，Periodic Nudge 周期性唤醒，Honcho 用户建模——Agent 越用越强。</p>
+
+  <!-- EVOLUTION BANNER -->
+  <div class="evolution-banner">
+    <span class="evolution-label">任务执行</span>
+    <span class="evolution-arrow">→</span>
+    <span class="evolution-label">效果评估</span>
+    <span class="evolution-arrow">→</span>
+    <span class="evolution-label">Skill 蒸馏</span>
+    <span class="evolution-arrow">→</span>
+    <span class="evolution-label">知识沉淀</span>
+    <span class="evolution-arrow">→</span>
+    <span class="evolution-label">下次调用</span>
+    <span class="evolution-arrow">↺</span>
+    <span class="evolution-label" style="color:#8b5cf6;font-weight:700">越用越强</span>
+  </div>
+
+  <!-- MAIN SVG ARCHITECTURE -->
+  <div class="arch-container">
+    <svg class="arch-svg" viewBox="0 0 1100 580" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#8b5cf6"/>
+        </marker>
+        <marker id="arr-sm" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto">
+          <path d="M0,0 L0,5 L6,2.5 z" fill="#a78bfa"/>
+        </marker>
+        <marker id="arr-cyan" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto">
+          <path d="M0,0 L0,5 L6,2.5 z" fill="#06b6d4"/>
+        </marker>
+        <filter id="glow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="glow-sm"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <style>
+          .flow  { stroke-dasharray:8,5;  animation:flowAnim 2s linear infinite; }
+          .flow2 { stroke-dasharray:6,4;  animation:flowAnim 1.5s linear infinite; }
+          .flow3 { stroke-dasharray:5,5;  animation:flowAnim 2.5s linear infinite reverse; }
+          @keyframes flowAnim { to { stroke-dashoffset:-26; } }
+          .pulse { animation:pulseAnim 2s ease-in-out infinite; }
+          @keyframes pulseAnim { 0%,100%{opacity:.5} 50%{opacity:1} }
+        </style>
+        <linearGradient id="grad-hm" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#3b0764"/>
+          <stop offset="100%" stop-color="#6d28d9"/>
+        </linearGradient>
+        <linearGradient id="grad-mem" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0c0619"/>
+          <stop offset="100%" stop-color="#1a0d35"/>
+        </linearGradient>
+        <linearGradient id="grad-skill" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0a1628"/>
+          <stop offset="100%" stop-color="#0d2438"/>
+        </linearGradient>
+      </defs>
+
+      <!-- USER -->
+      <circle cx="550" cy="44" r="22" fill="rgba(255,255,255,.07)" stroke="rgba(255,255,255,.18)" stroke-width="1.5"/>
+      <text x="550" y="49" text-anchor="middle" font-size="16">👤</text>
+      <text x="550" y="82" text-anchor="middle" fill="#64748b" font-family="Space Grotesk" font-size="12">自然语言输入</text>
+
+      <!-- Arrow user → main agent -->
+      <line x1="550" y1="68" x2="550" y2="113" stroke="#8b5cf6" stroke-width="2" class="flow" marker-end="url(#arr)"/>
+
+      <!-- MAIN AGENT CORE -->
+      <rect x="290" y="118" width="520" height="115" rx="16" fill="url(#grad-hm)" filter="url(#glow)"/>
+      <rect x="290" y="118" width="520" height="115" rx="16" fill="none" stroke="#a78bfa" stroke-width="1.5"/>
+      <text x="550" y="158" text-anchor="middle" fill="#fff" font-family="Space Grotesk" font-size="19" font-weight="700">🧠 Hermes Agent Core</text>
+      <text x="550" y="181" text-anchor="middle" fill="#c4b5fd" font-family="Space Grotesk" font-size="12">单体持久循环 · 四层记忆调度 · Periodic Nudge · Skill 蒸馏</text>
+      <text x="550" y="203" text-anchor="middle" fill="#6d28d9" font-family="JetBrains Mono" font-size="11">Python · Ollama · Honcho · MIT License</text>
+      <!-- Nous Research label -->
+      <rect x="440" y="218" width="220" height="22" rx="8" fill="rgba(139,92,246,.15)" stroke="rgba(139,92,246,.3)" stroke-width="1"/>
+      <text x="550" y="233" text-anchor="middle" fill="#a78bfa" font-family="JetBrains Mono" font-size="10">Nous Research · v0.7.0 · 2026-04</text>
+
+      <!-- FOUR MEMORY NODES (bottom row) -->
+      <!-- L1 Prompt Memory -->
+      <rect x="50" y="300" width="185" height="100" rx="12" fill="rgba(45,20,100,.5)" stroke="rgba(139,92,246,.5)" stroke-width="1.5"/>
+      <text x="142" y="325" text-anchor="middle" fill="#a78bfa" font-family="Space Grotesk" font-size="12" font-weight="700">L1 · Prompt Memory</text>
+      <text x="142" y="344" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="10">3575 chars · System prompt</text>
+      <rect x="66" y="354" width="152" height="20" rx="5" fill="rgba(139,92,246,.1)" stroke="rgba(139,92,246,.2)" stroke-width="1"/>
+      <text x="142" y="368" text-anchor="middle" fill="#c4b5fd" font-family="Space Grotesk" font-size="10">⚡ 热路径 · 直接注入</text>
+      <rect x="66" y="378" width="152" height="18" rx="5" fill="rgba(16,185,129,.06)" stroke="rgba(16,185,129,.15)" stroke-width="1"/>
+      <text x="142" y="391" text-anchor="middle" fill="#6ee7b7" font-family="Space Grotesk" font-size="10">✅ 人格 / 规则</text>
+
+      <!-- L2 Session Search -->
+      <rect x="260" y="300" width="185" height="100" rx="12" fill="rgba(10,22,50,.5)" stroke="rgba(6,182,212,.5)" stroke-width="1.5"/>
+      <text x="352" y="325" text-anchor="middle" fill="#67e8f9" font-family="Space Grotesk" font-size="12" font-weight="700">L2 · Session Search</text>
+      <text x="352" y="344" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="10">SQLite FTS5 · 向量检索</text>
+      <rect x="274" y="354" width="156" height="20" rx="5" fill="rgba(6,182,212,.1)" stroke="rgba(6,182,212,.2)" stroke-width="1"/>
+      <text x="352" y="368" text-anchor="middle" fill="#67e8f9" font-family="Space Grotesk" font-size="10">🔍 跨会话语义查询</text>
+      <rect x="274" y="378" width="156" height="18" rx="5" fill="rgba(16,185,129,.06)" stroke="rgba(16,185,129,.15)" stroke-width="1"/>
+      <text x="352" y="391" text-anchor="middle" fill="#6ee7b7" font-family="Space Grotesk" font-size="10">✅ 持久化对话记忆</text>
+
+      <!-- L3 Skills Procedural -->
+      <rect x="470" y="300" width="190" height="100" rx="12" fill="rgba(20,10,45,.5)" stroke="rgba(245,158,11,.5)" stroke-width="1.5"/>
+      <text x="565" y="325" text-anchor="middle" fill="#fcd34d" font-family="Space Grotesk" font-size="12" font-weight="700">L3 · Skills Library</text>
+      <text x="565" y="344" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="10">程序性记忆 · YAML蒸馏</text>
+      <rect x="484" y="354" width="162" height="20" rx="5" fill="rgba(245,158,11,.1)" stroke="rgba(245,158,11,.2)" stroke-width="1"/>
+      <text x="565" y="368" text-anchor="middle" fill="#fcd34d" font-family="Space Grotesk" font-size="10">🔧 自动 Skill 蒸馏</text>
+      <rect x="484" y="378" width="162" height="18" rx="5" fill="rgba(16,185,129,.06)" stroke="rgba(16,185,129,.15)" stroke-width="1"/>
+      <text x="565" y="391" text-anchor="middle" fill="#6ee7b7" font-family="Space Grotesk" font-size="10">✅ 可复用操作模板</text>
+
+      <!-- L4 Honcho -->
+      <rect x="685" y="300" width="185" height="100" rx="12" fill="rgba(10,30,20,.5)" stroke="rgba(16,185,129,.5)" stroke-width="1.5"/>
+      <text x="777" y="325" text-anchor="middle" fill="#34d399" font-family="Space Grotesk" font-size="12" font-weight="700">L4 · Honcho</text>
+      <text x="777" y="344" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="10">用户建模 · 偏好推断</text>
+      <rect x="699" y="354" width="156" height="20" rx="5" fill="rgba(16,185,129,.1)" stroke="rgba(16,185,129,.2)" stroke-width="1"/>
+      <text x="777" y="368" text-anchor="middle" fill="#34d399" font-family="Space Grotesk" font-size="10">👤 动态用户画像</text>
+      <rect x="699" y="378" width="156" height="18" rx="5" fill="rgba(16,185,129,.06)" stroke="rgba(16,185,129,.15)" stroke-width="1"/>
+      <text x="777" y="391" text-anchor="middle" fill="#6ee7b7" font-family="Space Grotesk" font-size="10">✅ 个性化长期记忆</text>
+
+      <!-- Arrows core → memories -->
+      <line x1="420" y1="235" x2="200" y2="298" stroke="#8b5cf6" stroke-width="1.5" class="flow2" marker-end="url(#arr-sm)"/>
+      <line x1="470" y1="235" x2="370" y2="298" stroke="#06b6d4" stroke-width="1.5" class="flow2" marker-end="url(#arr-cyan)"/>
+      <line x1="580" y1="235" x2="560" y2="298" stroke="#f59e0b" stroke-width="1.5" class="flow2" marker-end="url(#arr-sm)"/>
+      <line x1="660" y1="235" x2="740" y2="298" stroke="#10b981" stroke-width="1.5" class="flow2" marker-end="url(#arr-sm)"/>
+
+      <!-- Feedback arrows back to core (dashed) -->
+      <line x1="142" y1="300" x2="430" y2="240" stroke="#5b21b6" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-sm)"/>
+      <line x1="352" y1="300" x2="460" y2="240" stroke="#0891b2" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-sm)"/>
+      <line x1="565" y1="300" x2="570" y2="240" stroke="#d97706" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-sm)"/>
+      <line x1="777" y1="300" x2="680" y2="240" stroke="#059669" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-sm)"/>
+
+      <!-- PERIODIC NUDGE (bottom center) -->
+      <rect x="390" y="430" width="320" height="80" rx="14" fill="rgba(139,92,246,.08)" stroke="rgba(139,92,246,.35)" stroke-width="1.5"/>
+      <text x="550" y="458" text-anchor="middle" fill="#a78bfa" font-family="Space Grotesk" font-size="14" font-weight="700">⏰ Periodic Nudge 唤醒机制</text>
+      <text x="550" y="477" text-anchor="middle" fill="#64748b" font-family="Space Grotesk" font-size="12">定期注入系统提示 · 防止遗忘漂移</text>
+      <text x="550" y="496" text-anchor="middle" fill="#5b21b6" font-family="JetBrains Mono" font-size="10">nudge_frequency = n_turns · 强制记忆刷新</text>
+
+      <!-- Arrow nudge → core -->
+      <line x1="550" y1="430" x2="550" y2="238" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="6,4" class="flow3" marker-end="url(#arr)"/>
+
+      <!-- OUTPUT -->
+      <rect x="390" y="525" width="320" height="44" rx="12" fill="rgba(139,92,246,.08)" stroke="rgba(139,92,246,.25)" stroke-width="1"/>
+      <text x="550" y="551" text-anchor="middle" fill="#8b5cf6" font-family="Space Grotesk" font-size="13" font-weight="700">✅ 结构化输出 · Skill 沉淀 · 用户建模更新</text>
+
+      <!-- Labels -->
+      <text x="550" y="280" text-anchor="middle" fill="#3b0764" font-family="Space Grotesk" font-size="11">— 四层记忆协同调度 —</text>
+    </svg>
+  </div>
+
+  <!-- 4-LAYER MEMORY CARDS -->
+  <div class="memory-section">
+    <div class="section-title">四层记忆层次详解</div>
+    <div class="memory-layers">
+      <div class="mem-card">
+        <div class="mem-layer-num">L1 · PROMPT MEMORY</div>
+        <div class="mem-name">系统提示记忆</div>
+        <div class="mem-size">3575 chars · 恒定注入</div>
+        <div class="mem-desc">每次对话初始化时注入 system prompt，包含 Agent 人格定义、核心规则和工具调用指南。这是最热、最快的记忆路径——始终在上下文窗口中，零检索延迟。</div>
+        <div class="mem-tags">
+          <span class="mem-tag">人格定义</span>
+          <span class="mem-tag">工具规则</span>
+          <span class="mem-tag">0延迟</span>
+        </div>
+      </div>
+      <div class="mem-card">
+        <div class="mem-layer-num">L2 · SESSION SEARCH</div>
+        <div class="mem-name">会话语义检索</div>
+        <div class="mem-size">SQLite FTS5 + 向量</div>
+        <div class="mem-desc">跨会话持久化对话历史，支持全文检索（FTS5）与语义向量检索双路并行。每次对话前根据当前输入检索最相关的历史片段注入上下文，实现长期记忆。</div>
+        <div class="mem-tags">
+          <span class="mem-tag">跨会话</span>
+          <span class="mem-tag">双路检索</span>
+          <span class="mem-tag">持久化</span>
+        </div>
+      </div>
+      <div class="mem-card">
+        <div class="mem-layer-num">L3 · SKILLS LIBRARY</div>
+        <div class="mem-name">技能程序库</div>
+        <div class="mem-size">YAML · 自动蒸馏</div>
+        <div class="mem-desc">Agent 完成任务后自动评估执行过程，将可复用的操作序列蒸馏为 YAML Skill 文件。下次遇到相似任务时，Agent 优先调用已有 Skill，跳过重新推理阶段。</div>
+        <div class="mem-tags">
+          <span class="mem-tag">自动蒸馏</span>
+          <span class="mem-tag">YAML格式</span>
+          <span class="mem-tag">越用越强</span>
+        </div>
+      </div>
+      <div class="mem-card">
+        <div class="mem-layer-num">L4 · HONCHO</div>
+        <div class="mem-name">Honcho 用户建模</div>
+        <div class="mem-size">动态偏好推断</div>
+        <div class="mem-desc">独立的用户建模层，持续追踪用户偏好、习惯和反馈模式，构建动态用户画像。Agent 根据用户模型调整响应风格、主动程度和专业深度，实现真正的个性化适配。</div>
+        <div class="mem-tags">
+          <span class="mem-tag">用户画像</span>
+          <span class="mem-tag">偏好追踪</span>
+          <span class="mem-tag">个性化</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SKILL DISTILLATION PIPELINE -->
+  <div class="distill-section">
+    <div class="section-title">Skill 自动蒸馏流水线</div>
+    <div class="distill-pipeline">
+      <svg class="pipeline-svg" viewBox="0 0 900 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="pipe-arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#8b5cf6"/>
+          </marker>
+          <style>
+            .pipe-flow { stroke-dasharray:6,4; animation:pipeAnim 1.8s linear infinite; }
+            @keyframes pipeAnim { to { stroke-dashoffset:-20; } }
+          </style>
+        </defs>
+
+        <!-- Stage 1: Task -->
+        <rect x="20" y="70" width="130" height="60" rx="10" fill="rgba(45,20,100,.6)" stroke="rgba(139,92,246,.5)" stroke-width="1.5"/>
+        <text x="85" y="98" text-anchor="middle" fill="#a78bfa" font-family="Space Grotesk" font-size="13" font-weight="600">📋 任务执行</text>
+        <text x="85" y="116" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="10">Tool Call 序列</text>
+
+        <!-- Arrow 1→2 -->
+        <line x1="152" y1="100" x2="193" y2="100" stroke="#8b5cf6" stroke-width="2" class="pipe-flow" marker-end="url(#pipe-arr)"/>
+
+        <!-- Stage 2: Eval -->
+        <rect x="195" y="70" width="130" height="60" rx="10" fill="rgba(20,10,50,.6)" stroke="rgba(139,92,246,.4)" stroke-width="1.5"/>
+        <text x="260" y="98" text-anchor="middle" fill="#c4b5fd" font-family="Space Grotesk" font-size="13" font-weight="600">🔍 效果评估</text>
+        <text x="260" y="116" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="10">LLM Judge打分</text>
+
+        <!-- Arrow 2→3 -->
+        <line x1="327" y1="100" x2="368" y2="100" stroke="#8b5cf6" stroke-width="2" class="pipe-flow" marker-end="url(#pipe-arr)"/>
+
+        <!-- Stage 3: Extract -->
+        <rect x="370" y="70" width="130" height="60" rx="10" fill="rgba(30,15,60,.6)" stroke="rgba(245,158,11,.4)" stroke-width="1.5"/>
+        <text x="435" y="98" text-anchor="middle" fill="#fcd34d" font-family="Space Grotesk" font-size="13" font-weight="600">⚗️ 模式提取</text>
+        <text x="435" y="116" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="10">可复用序列抽取</text>
+
+        <!-- Arrow 3→4 -->
+        <line x1="502" y1="100" x2="543" y2="100" stroke="#8b5cf6" stroke-width="2" class="pipe-flow" marker-end="url(#pipe-arr)"/>
+
+        <!-- Stage 4: Write YAML -->
+        <rect x="545" y="70" width="130" height="60" rx="10" fill="rgba(10,20,40,.6)" stroke="rgba(16,185,129,.4)" stroke-width="1.5"/>
+        <text x="610" y="98" text-anchor="middle" fill="#34d399" font-family="Space Grotesk" font-size="13" font-weight="600">📄 写入 Skill</text>
+        <text x="610" y="116" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="10">YAML格式持久化</text>
+
+        <!-- Arrow 4→5 -->
+        <line x1="677" y1="100" x2="718" y2="100" stroke="#8b5cf6" stroke-width="2" class="pipe-flow" marker-end="url(#pipe-arr)"/>
+
+        <!-- Stage 5: Reuse -->
+        <rect x="720" y="70" width="150" height="60" rx="10" fill="rgba(45,20,100,.6)" stroke="rgba(139,92,246,.6)" stroke-width="2"/>
+        <text x="795" y="98" text-anchor="middle" fill="#a78bfa" font-family="Space Grotesk" font-size="13" font-weight="700">♻️ 技能复用</text>
+        <text x="795" y="116" text-anchor="middle" fill="#475569" font-family="JetBrains Mono" font-size="10">类似任务直接调用</text>
+
+        <!-- Feedback loop -->
+        <path d="M870,100 Q890,100 890,160 Q890,185 550,185 Q200,185 85,185 Q20,185 20,150 L20,132" stroke="#5b21b6" stroke-width="1" stroke-dasharray="4,3" fill="none" marker-end="url(#pipe-arr)"/>
+        <text x="450" y="178" text-anchor="middle" fill="#4c1d95" font-family="Space Grotesk" font-size="10">自我进化循环</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- PERIODIC NUDGE MECHANISM -->
+  <div class="nudge-section">
+    <div class="section-title">Periodic Nudge 周期唤醒机制</div>
+    <div class="nudge-cards">
+      <div class="nudge-card">
+        <div class="nudge-icon">⏱️</div>
+        <div class="nudge-name">定频触发</div>
+        <div class="nudge-desc">每隔 N 轮对话（nudge_frequency 可配），系统自动注入特殊提示，刷新 Agent 的记忆锚点与行为规范，防止长对话中的规则漂移</div>
+      </div>
+      <div class="nudge-card">
+        <div class="nudge-icon">🧭</div>
+        <div class="nudge-name">记忆巩固</div>
+        <div class="nudge-desc">Nudge 内容包含用户建模摘要、重要规则重申、近期 Skill 更新等，相当于 Agent 的"工作记忆刷新"，确保长期运行时的行为一致性</div>
+      </div>
+      <div class="nudge-card">
+        <div class="nudge-icon">🔄</div>
+        <div class="nudge-name">无缝透明</div>
+        <div class="nudge-desc">Nudge 对用户完全透明，不打断对话流程。Agent 在内部悄然更新状态，像人类一样在长时间对话中通过自我提醒保持专注与一致</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HONCHO USER MODELING -->
+  <div class="honcho-box">
+    <div>
+      <div class="honcho-title">👤 Honcho 用户建模层</div>
+      <div class="honcho-desc">
+        Honcho 是 Hermes Agent 的第四层记忆，也是它与竞品最大的差异化所在。不同于通用 Agent 对所有用户一视同仁，Hermes 持续观察用户的交互模式、反馈信号和偏好习惯，动态构建用户画像。<br><br>
+        随着使用时间增长，Agent 越来越"了解"这个用户——知道他喜欢简洁还是详细的回答、擅长哪些领域、什么话题需要谨慎。这种个性化适应能力，让 Hermes 从工具进化为真正的私人助理。
+      </div>
+    </div>
+    <div>
+      <div class="honcho-title" style="color:#34d399">建模维度</div>
+      <div class="honcho-metric">
+        <div class="hm-row">
+          <span class="hm-label">回答详细度偏好</span>
+          <div class="hm-bar-bg"><div class="hm-bar" style="width:88%"></div></div>
+          <span class="hm-val">88%</span>
+        </div>
+        <div class="hm-row">
+          <span class="hm-label">专业领域追踪</span>
+          <div class="hm-bar-bg"><div class="hm-bar" style="width:75%"></div></div>
+          <span class="hm-val">75%</span>
+        </div>
+        <div class="hm-row">
+          <span class="hm-label">交互节奏学习</span>
+          <div class="hm-bar-bg"><div class="hm-bar" style="width:92%"></div></div>
+          <span class="hm-val">92%</span>
+        </div>
+        <div class="hm-row">
+          <span class="hm-label">反馈信号捕捉</span>
+          <div class="hm-bar-bg"><div class="hm-bar" style="width:68%"></div></div>
+          <span class="hm-val">68%</span>
+        </div>
+        <div class="hm-row">
+          <span class="hm-label">长期偏好持久化</span>
+          <div class="hm-bar-bg"><div class="hm-bar" style="width:95%"></div></div>
+          <span class="hm-val">95%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">🧬</div>
+      <div class="feature-name">自进化能力</div>
+      <div class="feature-desc">每次任务执行后自动评估并蒸馏可复用 Skill，Agent 不断从自身经验中学习，无需人工干预即可提升能力</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💾</div>
+      <div class="feature-name">四层记忆协调</div>
+      <div class="feature-desc">Prompt/Session/Skills/Honcho 四层各司其职，构成完整的记忆体系。热路径毫秒响应，冷路径海量存储，智能调度按需检索</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🤗</div>
+      <div class="feature-name">Hugging Face 模型</div>
+      <div class="feature-desc">MIT 开源，包含模型权重。支持 Ollama 本地推理，可在 $5/月 VPS 上运行，完全私有化部署，数据不离本地</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">⏰</div>
+      <div class="feature-name">Periodic Nudge</div>
+      <div class="feature-desc">独创的周期唤醒机制，定频刷新 Agent 记忆锚点，解决长对话中的规则漂移问题，保持行为长期一致</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🎯</div>
+      <div class="feature-name">Honcho 个性化</div>
+      <div class="feature-desc">持续构建动态用户画像，追踪偏好与习惯。越用越了解用户，从通用工具进化为真正的私人助理</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔓</div>
+      <div class="feature-name">完全开源</div>
+      <div class="feature-desc">Nous Research MIT 协议开源，含模型权重。开发者可自由修改、部署、商用，社区驱动持续演进</div>
+    </div>
+  </div>
+
+  <!-- TECH STACK -->
+  <div style="margin-bottom:48px">
+    <div class="section-title" style="margin-bottom:16px">技术栈</div>
+    <div class="tech-row">
+      <span class="tech-chip">Python</span>
+      <span class="tech-chip">Ollama</span>
+      <span class="tech-chip">SQLite FTS5</span>
+      <span class="tech-chip">Honcho</span>
+      <span class="tech-chip">YAML Skills</span>
+      <span class="tech-chip">Nous Research</span>
+      <span class="tech-chip">MIT License</span>
+      <span class="tech-chip">Hugging Face</span>
+    </div>
+  </div>
+
+  <footer>
+    Hermes Agent Architecture · Nous Research · v0.7.0<br>
+    <span style="opacity:.4">VibeBloging Architecture Series 2026</span>
+  </footer>
+</div>
+</body>
+</html>

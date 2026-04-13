@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code · QueryLoop 执行引擎</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #030712;
+  --cc: #3b82f6;
+  --cc-light: #60a5fa;
+  --text: #e2e8f0;
+  --muted: #475569;
+  --glass: rgba(59,130,246,.06);
+  --glass-border: rgba(59,130,246,.18);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Space Grotesk', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height:100vh;
+}
+body::before {
+  content:'';
+  position:fixed; inset:0;
+  background:
+    radial-gradient(ellipse 70% 40% at 50% 0%, rgba(59,130,246,.1) 0%, transparent 60%),
+    linear-gradient(rgba(59,130,246,.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59,130,246,.02) 1px, transparent 1px);
+  background-size: auto, 50px 50px, 50px 50px;
+  z-index:0; pointer-events:none;
+}
+.page { position:relative; z-index:1; max-width:1400px; margin:0 auto; padding:40px 24px 80px; }
+
+.badge { display:inline-flex; align-items:center; gap:8px; border:1px solid rgba(59,130,246,.3); background:rgba(59,130,246,.08); padding:5px 14px; border-radius:100px; font-size:11px; color:var(--cc-light); letter-spacing:.1em; text-transform:uppercase; margin-bottom:20px; font-family:'JetBrains Mono',monospace; }
+.badge .dot { width:6px; height:6px; border-radius:50%; background:var(--cc); animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(59,130,246,.5)} 50%{box-shadow:0 0 0 8px rgba(59,130,246,0)} }
+h1 { font-size:clamp(32px,5vw,64px); font-weight:700; line-height:1.05; color:#fff; margin-bottom:10px; }
+h1 span { color:var(--cc); }
+.subtitle { color:var(--muted); font-size:16px; max-width:700px; margin-bottom:56px; line-height:1.7; }
+
+/* MAIN LAYOUT */
+.main-grid { display:grid; grid-template-columns:1fr 1fr; gap:32px; margin-bottom:40px; }
+@media(max-width:900px){ .main-grid{grid-template-columns:1fr;} }
+
+/* LOOP RING */
+.loop-container {
+  background:var(--glass); border:1px solid var(--glass-border);
+  border-radius:20px; padding:32px;
+  display:flex; flex-direction:column; align-items:center;
+}
+.loop-title { font-size:13px; color:var(--cc-light); letter-spacing:.1em; text-transform:uppercase; font-weight:700; margin-bottom:28px; }
+
+.ring-svg-wrapper { width:280px; height:280px; position:relative; }
+.ring-svg { width:100%; height:100%; }
+
+/* Phase labels outside ring */
+.phase-labels { position:absolute; inset:0; }
+.phase-label {
+  position:absolute; transform:translate(-50%,-50%);
+  text-align:center;
+}
+.phase-label .pname { font-size:13px; font-weight:700; font-family:'JetBrains Mono',monospace; }
+.phase-label .pdesc { font-size:10px; color:var(--muted); margin-top:2px; }
+
+/* State indicator */
+.state-indicator {
+  margin-top:20px;
+  display:flex; gap:12px; justify-content:center; flex-wrap:wrap;
+}
+.state-pill {
+  padding:6px 16px; border-radius:20px;
+  font-size:12px; font-family:'JetBrains Mono',monospace; font-weight:700;
+  cursor:pointer; transition:all .3s;
+  opacity:.4;
+}
+.state-pill.active { opacity:1; }
+.sp-p { background:rgba(6,182,212,.15); color:#06b6d4; border:1px solid rgba(6,182,212,.4); }
+.sp-r { background:rgba(59,130,246,.15); color:#60a5fa; border:1px solid rgba(59,130,246,.4); }
+.sp-a { background:rgba(16,185,129,.15); color:#34d399; border:1px solid rgba(16,185,129,.4); }
+.sp-v { background:rgba(245,158,11,.15); color:#fbbf24; border:1px solid rgba(245,158,11,.4); }
+
+/* PSEUDO CODE */
+.code-panel {
+  background:#0d1117; border:1px solid rgba(59,130,246,.2);
+  border-radius:20px; padding:0; overflow:hidden;
+}
+.code-header {
+  background:rgba(59,130,246,.06); border-bottom:1px solid rgba(59,130,246,.15);
+  padding:12px 20px; display:flex; align-items:center; gap:8px;
+}
+.code-dots { display:flex; gap:6px; }
+.code-dots span { width:10px; height:10px; border-radius:50%; }
+.code-dots .cd1 { background:#ff5f57; }
+.code-dots .cd2 { background:#ffbd2e; }
+.code-dots .cd3 { background:#28ca41; }
+.code-title { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--muted); }
+.code-body { padding:20px; overflow-x:auto; }
+pre {
+  font-family:'JetBrains Mono',monospace;
+  font-size:12px; line-height:1.7;
+  white-space:pre;
+  color:#94a3b8;
+}
+.hl-comment { color:#4b5563; }
+.hl-keyword { color:#c084fc; }
+.hl-func { color:#60a5fa; }
+.hl-string { color:#86efac; }
+.hl-var { color:#fbbf24; }
+.hl-active { background:rgba(59,130,246,.15); border-radius:4px; padding:0 4px; color:#e2e8f0; }
+
+/* CONTEXT BAR */
+.ctx-section {
+  background:var(--glass); border:1px solid var(--glass-border);
+  border-radius:16px; padding:24px; margin-bottom:32px;
+}
+.ctx-title { font-size:13px; color:var(--cc-light); letter-spacing:.1em; text-transform:uppercase; font-weight:700; margin-bottom:16px; }
+.ctx-bar-wrapper { position:relative; }
+.ctx-bar-bg {
+  height:32px; border-radius:8px; overflow:hidden;
+  background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);
+  position:relative;
+}
+.ctx-bar-fill {
+  height:100%; border-radius:8px;
+  background:linear-gradient(90deg, #1d4ed8, #3b82f6, #60a5fa);
+  transition:width 1s ease;
+  position:relative; overflow:hidden;
+}
+.ctx-bar-fill::after {
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,.15), transparent);
+  animation:shimmer 2s infinite;
+}
+@keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+.ctx-threshold {
+  position:absolute; top:0; height:100%; width:2px; background:#f59e0b;
+  box-shadow:0 0 8px #f59e0b;
+}
+.ctx-threshold::after {
+  content:'70%'; position:absolute; top:-20px; left:4px;
+  font-size:10px; font-family:'JetBrains Mono',monospace;
+  color:#f59e0b;
+}
+.ctx-labels { display:flex; justify-content:space-between; margin-top:8px; font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+.ctx-percent { font-size:14px; font-weight:700; color:var(--cc-light); margin-top:8px; }
+
+/* API SEQUENCE */
+.seq-section {
+  background:var(--glass); border:1px solid var(--glass-border);
+  border-radius:16px; padding:24px;
+}
+.seq-title { font-size:13px; color:var(--cc-light); letter-spacing:.1em; text-transform:uppercase; font-weight:700; margin-bottom:20px; }
+.seq-svg { width:100%; overflow-x:auto; }
+
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="badge"><span class="dot"></span>InsightClaudeCode · Vol.01</div>
+  <h1>QueryLoop<br><span>执行引擎</span></h1>
+  <p class="subtitle">Claude Code 的跳动心脏 · 感知→推理→行动→验证 · API 时序 · 上下文窗口动态</p>
+
+  <!-- CONTEXT BAR (top) -->
+  <div class="ctx-section">
+    <p class="ctx-title">上下文窗口使用率（动态）</p>
+    <div class="ctx-bar-wrapper">
+      <div class="ctx-bar-bg">
+        <div class="ctx-bar-fill" id="ctxBar" style="width:58%"></div>
+        <div class="ctx-threshold" style="left:70%"></div>
+      </div>
+      <div class="ctx-labels">
+        <span>0 tokens</span>
+        <span id="ctxLabel">116K / 200K tokens — 58%</span>
+        <span>200K</span>
+      </div>
+    </div>
+    <p class="ctx-percent" id="ctxNote">正常运行中 · 距压缩触发还有 24K tokens</p>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+
+    <!-- LOOP RING -->
+    <div class="loop-container">
+      <p class="loop-title">Core Agentic Loop</p>
+      <div class="ring-svg-wrapper">
+        <svg class="ring-svg" viewBox="0 0 280 280">
+          <defs>
+            <filter id="glow-c">
+              <feGaussianBlur stdDeviation="3" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <filter id="glow-b">
+              <feGaussianBlur stdDeviation="3" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+
+          <!-- Background rings -->
+          <circle cx="140" cy="140" r="100" fill="none" stroke="rgba(59,130,246,.06)" stroke-width="40"/>
+          <circle cx="140" cy="140" r="100" fill="none" stroke="rgba(59,130,246,.1)" stroke-width="1"/>
+          <circle cx="140" cy="140" r="60" fill="none" stroke="rgba(59,130,246,.06)" stroke-width="1"/>
+
+          <!-- Animated arc segments -->
+          <!-- Each quarter: circumference ~628, quarter ~157 -->
+          <!-- Perception: top arc (270° to 0°) -->
+          <circle cx="140" cy="140" r="100" fill="none"
+            stroke="#06b6d4" stroke-width="8" stroke-linecap="round"
+            stroke-dasharray="157 471"
+            stroke-dashoffset="157"
+            opacity=".8"
+            filter="url(#glow-c)">
+            <animate attributeName="opacity" values=".3;1;.3" dur="3s" begin="0s" repeatCount="indefinite"/>
+          </circle>
+          <!-- Reasoning: right arc -->
+          <circle cx="140" cy="140" r="100" fill="none"
+            stroke="#3b82f6" stroke-width="8" stroke-linecap="round"
+            stroke-dasharray="157 471"
+            stroke-dashoffset="0"
+            opacity=".8">
+            <animate attributeName="opacity" values=".3;1;.3" dur="3s" begin=".75s" repeatCount="indefinite"/>
+          </circle>
+          <!-- Action: bottom arc -->
+          <circle cx="140" cy="140" r="100" fill="none"
+            stroke="#10b981" stroke-width="8" stroke-linecap="round"
+            stroke-dasharray="157 471"
+            stroke-dashoffset="-157"
+            opacity=".8">
+            <animate attributeName="opacity" values=".3;1;.3" dur="3s" begin="1.5s" repeatCount="indefinite"/>
+          </circle>
+          <!-- Validation: left arc -->
+          <circle cx="140" cy="140" r="100" fill="none"
+            stroke="#f59e0b" stroke-width="8" stroke-linecap="round"
+            stroke-dasharray="157 471"
+            stroke-dashoffset="-314"
+            opacity=".8">
+            <animate attributeName="opacity" values=".3;1;.3" dur="3s" begin="2.25s" repeatCount="indefinite"/>
+          </circle>
+
+          <!-- Arrows at transitions -->
+          <polygon points="140,34 134,46 146,46" fill="#06b6d4" opacity=".8"/>
+          <polygon points="246,140 234,134 234,146" fill="#3b82f6" opacity=".8"/>
+          <polygon points="140,246 146,234 134,234" fill="#10b981" opacity=".8"/>
+          <polygon points="34,140 46,146 46,134" fill="#f59e0b" opacity=".8"/>
+
+          <!-- Center labels -->
+          <text x="140" y="134" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="13" fill="#60a5fa" font-weight="bold">QueryLoop</text>
+          <text x="140" y="152" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="10" fill="#475569">∞ continuous</text>
+
+          <!-- Phase labels -->
+          <text x="140" y="18" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="11" fill="#06b6d4" font-weight="bold">Perception</text>
+          <text x="272" y="144" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="11" fill="#60a5fa" font-weight="bold">Reasoning</text>
+          <text x="140" y="272" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="11" fill="#34d399" font-weight="bold">Action</text>
+          <text x="14" y="144" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="11" fill="#fbbf24" font-weight="bold">Validation</text>
+
+          <!-- Sub-labels -->
+          <text x="140" y="28" text-anchor="middle" font-family="'Space Grotesk',sans-serif" font-size="9" fill="#475569">用户输入 / 上下文</text>
+          <text x="270" y="158" text-anchor="middle" font-family="'Space Grotesk',sans-serif" font-size="9" fill="#475569">claude_api()</text>
+          <text x="140" y="262" text-anchor="middle" font-family="'Space Grotesk',sans-serif" font-size="9" fill="#475569">execute_tool()</text>
+          <text x="16" y="130" text-anchor="middle" font-family="'Space Grotesk',sans-serif" font-size="9" fill="#475569">result inject</text>
+        </svg>
+      </div>
+
+      <div class="state-indicator">
+        <div class="state-pill sp-p active" id="pill-p">Perception</div>
+        <div class="state-pill sp-r" id="pill-r">Reasoning</div>
+        <div class="state-pill sp-a" id="pill-a">Action</div>
+        <div class="state-pill sp-v" id="pill-v">Validation</div>
+      </div>
+    </div>
+
+    <!-- PSEUDO CODE -->
+    <div class="code-panel">
+      <div class="code-header">
+        <div class="code-dots"><span class="cd1"></span><span class="cd2"></span><span class="cd3"></span></div>
+        <span class="code-title">query_loop.py · Harness 核心伪代码</span>
+      </div>
+      <div class="code-body">
+        <pre><span class="hl-comment"># ── 启动阶段 ─────────────────────</span>
+<span class="hl-keyword">def</span> <span class="hl-func">startup</span>():
+    <span class="hl-func">load_claude_md</span>()        <span class="hl-comment"># 项目记忆</span>
+    <span class="hl-func">load_memory_files</span>()     <span class="hl-comment"># 持久记忆</span>
+    <span class="hl-func">build_system_prompt</span>()   <span class="hl-comment"># 组装提示</span>
+    <span class="hl-func">connect_mcp_servers</span>()   <span class="hl-comment"># MCP 初始化</span>
+
+<span class="hl-comment"># ── 主循环 ───────────────────────</span>
+<span class="hl-keyword">def</span> <span class="hl-func">query_loop</span>(<span class="hl-var">user_input</span>):
+    <span class="hl-var">messages</span> = [system_prompt, user_input]
+
+    <span class="hl-keyword">while</span> <span class="hl-keyword">True</span>:
+        <span class="hl-comment"># ① REASONING</span>
+        <span class="hl-var">response</span> = <span class="hl-func">claude_api</span>(<span class="hl-var">messages</span>)
+
+        <span class="hl-keyword">if</span> <span class="hl-var">response</span>.has_tool_call:
+            <span class="hl-var">tc</span> = <span class="hl-var">response</span>.tool_calls[0]
+
+            <span class="hl-comment"># ② PERMISSION CHECK</span>
+            <span class="hl-var">perm</span> = <span class="hl-func">check_permissions</span>(<span class="hl-var">tc</span>)
+            <span class="hl-keyword">if</span> <span class="hl-var">perm</span> == DENY: <span class="hl-keyword">continue</span>
+
+            <span class="hl-comment"># ③ PRE HOOK</span>
+            <span class="hl-func">run_hooks</span>(<span class="hl-string">"PreToolUse"</span>, <span class="hl-var">tc</span>)
+
+            <span class="hl-comment"># ④ ACTION</span>
+            <span class="hl-var">result</span> = <span class="hl-func">execute_tool</span>(<span class="hl-var">tc</span>)
+
+            <span class="hl-comment"># ⑤ POST HOOK</span>
+            <span class="hl-func">run_hooks</span>(<span class="hl-string">"PostToolUse"</span>, <span class="hl-var">tc</span>, <span class="hl-var">result</span>)
+
+            <span class="hl-comment"># ⑥ INJECT</span>
+            <span class="hl-var">messages</span>.append(<span class="hl-var">result</span>)
+
+            <span class="hl-comment"># ⑦ VALIDATION → compress?</span>
+            <span class="hl-keyword">if</span> <span class="hl-func">ctx_ratio</span>() > <span class="hl-string">0.70</span>:
+                <span class="hl-func">compress_context</span>(<span class="hl-var">messages</span>)
+
+        <span class="hl-keyword">else</span>:
+            <span class="hl-comment"># FINAL OUTPUT</span>
+            <span class="hl-func">display_output</span>(<span class="hl-var">response</span>.text)
+            <span class="hl-func">run_hooks</span>(<span class="hl-string">"Stop"</span>, <span class="hl-var">response</span>)
+            <span class="hl-var">user_input</span> = <span class="hl-func">wait_input</span>()
+            <span class="hl-keyword">if not</span> <span class="hl-var">user_input</span>: <span class="hl-keyword">break</span></pre>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- API SEQUENCE -->
+  <div class="seq-section">
+    <p class="seq-title">API 调用时序图（一次典型工具调用）</p>
+    <svg viewBox="0 0 1200 200" style="width:100%;min-width:800px;">
+      <defs>
+        <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#3b82f6"/>
+        </marker>
+        <marker id="arr2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#10b981"/>
+        </marker>
+        <marker id="arr3" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#f59e0b"/>
+        </marker>
+      </defs>
+
+      <!-- Lanes -->
+      <text x="80" y="24" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="11" fill="#475569">User</text>
+      <text x="300" y="24" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="11" fill="#475569">Harness</text>
+      <text x="600" y="24" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="11" fill="#60a5fa">Claude API</text>
+      <text x="900" y="24" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="11" fill="#34d399">Tool Executor</text>
+
+      <!-- Lifelines -->
+      <line x1="80" y1="30" x2="80" y2="190" stroke="rgba(255,255,255,.08)" stroke-width="1" stroke-dasharray="4,4"/>
+      <line x1="300" y1="30" x2="300" y2="190" stroke="rgba(255,255,255,.08)" stroke-width="1" stroke-dasharray="4,4"/>
+      <line x1="600" y1="30" x2="600" y2="190" stroke="rgba(59,130,246,.3)" stroke-width="1" stroke-dasharray="4,4"/>
+      <line x1="900" y1="30" x2="900" y2="190" stroke="rgba(16,185,129,.2)" stroke-width="1" stroke-dasharray="4,4"/>
+
+      <!-- 1. User → Harness -->
+      <line x1="90" y1="55" x2="285" y2="55" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="185" y="48" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="10" fill="#60a5fa">user_input</text>
+
+      <!-- 2. Harness → API -->
+      <line x1="310" y1="75" x2="585" y2="75" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="445" y="68" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="10" fill="#60a5fa">API Call #1 (messages)</text>
+
+      <!-- 3. API → Harness (tool_call) -->
+      <line x1="590" y1="95" x2="315" y2="95" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#arr3)"/>
+      <text x="445" y="88" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="10" fill="#fbbf24">tool_call: Read("file.py")</text>
+
+      <!-- 4. Harness → Tool -->
+      <line x1="310" y1="115" x2="885" y2="115" stroke="#10b981" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <text x="595" y="108" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="10" fill="#34d399">execute_tool(Read, "file.py")</text>
+
+      <!-- 5. Tool → Harness -->
+      <line x1="890" y1="135" x2="315" y2="135" stroke="#10b981" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <text x="595" y="128" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="10" fill="#34d399">tool_result: file content</text>
+
+      <!-- 6. Harness → API #2 -->
+      <line x1="310" y1="155" x2="585" y2="155" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="445" y="148" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="10" fill="#60a5fa">API Call #2 (messages + result)</text>
+
+      <!-- 7. API → User (final) -->
+      <line x1="590" y1="175" x2="95" y2="175" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="340" y="168" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="10" fill="#c084fc">final response (no tool_call)</text>
+    </svg>
+  </div>
+
+</div>
+
+<script>
+// Animate context bar
+let pct = 58;
+const bar = document.getElementById('ctxBar');
+const label = document.getElementById('ctxLabel');
+const note = document.getElementById('ctxNote');
+
+function updateCtx() {
+  pct = pct + (Math.random() - 0.45) * 2;
+  pct = Math.max(20, Math.min(85, pct));
+  bar.style.width = pct + '%';
+  const tokens = Math.round(pct * 2000);
+  label.textContent = `${tokens}K / 200K tokens — ${Math.round(pct)}%`;
+  if (pct >= 70) {
+    note.textContent = '⚠ 上下文达阈值 · 触发 /compact 压缩';
+    note.style.color = '#f59e0b';
+    bar.style.background = 'linear-gradient(90deg, #92400e, #d97706, #fbbf24)';
+  } else {
+    note.textContent = `正常运行中 · 距压缩触发还有 ${Math.round((70 - pct) * 2000)}K tokens`;
+    note.style.color = '#60a5fa';
+    bar.style.background = 'linear-gradient(90deg, #1d4ed8, #3b82f6, #60a5fa)';
+  }
+}
+setInterval(updateCtx, 1800);
+
+// Animate pills
+const pills = [
+  document.getElementById('pill-p'),
+  document.getElementById('pill-r'),
+  document.getElementById('pill-a'),
+  document.getElementById('pill-v'),
+];
+let currentPill = 0;
+function nextPill() {
+  pills.forEach(p => p.classList.remove('active'));
+  pills[currentPill].classList.add('active');
+  currentPill = (currentPill + 1) % 4;
+}
+setInterval(nextPill, 750);
+</script>
+</body>
+</html>

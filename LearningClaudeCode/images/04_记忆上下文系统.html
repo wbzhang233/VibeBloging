@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code · 记忆上下文系统</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #030712;
+  --cc: #3b82f6;
+  --cc-light: #60a5fa;
+  --text: #e2e8f0;
+  --muted: #475569;
+  --glass: rgba(59,130,246,.06);
+  --glass-border: rgba(59,130,246,.18);
+  --l1c: #f59e0b; /* CLAUDE.md */
+  --l2c: #3b82f6; /* Dialog History */
+  --l3c: #10b981; /* Memory Files */
+  --l4c: #8b5cf6; /* Prompt Cache */
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+body::before {
+  content:''; position:fixed; inset:0;
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 50%, rgba(139,92,246,.06) 0%, transparent 60%),
+    linear-gradient(rgba(59,130,246,.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59,130,246,.02) 1px, transparent 1px);
+  background-size: auto, 50px 50px, 50px 50px;
+  z-index:0; pointer-events:none;
+}
+.page { position:relative; z-index:1; max-width:1400px; margin:0 auto; padding:40px 24px 80px; }
+
+.badge { display:inline-flex; align-items:center; gap:8px; border:1px solid rgba(139,92,246,.3); background:rgba(139,92,246,.08); padding:5px 14px; border-radius:100px; font-size:11px; color:#c084fc; letter-spacing:.1em; text-transform:uppercase; margin-bottom:20px; font-family:'JetBrains Mono',monospace; }
+.badge .dot { width:6px; height:6px; border-radius:50%; background:#8b5cf6; animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(139,92,246,.5)} 50%{box-shadow:0 0 0 8px rgba(139,92,246,0)} }
+h1 { font-size:clamp(32px,5vw,64px); font-weight:700; line-height:1.05; color:#fff; margin-bottom:10px; }
+h1 span { color:#c084fc; }
+.subtitle { color:var(--muted); font-size:16px; max-width:700px; margin-bottom:48px; line-height:1.7; }
+
+/* MAIN GRID */
+.main-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:24px; margin-bottom:40px; }
+@media(max-width:1100px){ .main-grid{grid-template-columns:1fr 1fr;} }
+@media(max-width:700px){ .main-grid{grid-template-columns:1fr;} }
+
+/* CONCENTRIC RINGS SVG SECTION */
+.concentric-section {
+  background:rgba(139,92,246,.03); border:1px solid rgba(139,92,246,.15);
+  border-radius:20px; padding:32px; margin-bottom:40px;
+  display:flex; justify-content:center; align-items:center;
+  flex-direction:column;
+}
+
+/* MEMORY LAYER CARDS */
+.mem-card {
+  border-radius:16px; padding:20px;
+  border:1px solid var(--mc-border);
+  background:var(--mc-bg);
+  transition:all .3s;
+  position:relative; overflow:hidden;
+}
+.mem-card:hover { transform:translateY(-4px); box-shadow:0 8px 30px var(--mc-glow); }
+.mem-card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background:var(--mc-color); box-shadow:0 0 16px var(--mc-color);
+}
+
+.mc-l1 { --mc-color:#f59e0b; --mc-border:rgba(245,158,11,.2); --mc-bg:rgba(245,158,11,.05); --mc-glow:rgba(245,158,11,.2); }
+.mc-l2 { --mc-color:#3b82f6; --mc-border:rgba(59,130,246,.2); --mc-bg:rgba(59,130,246,.05); --mc-glow:rgba(59,130,246,.2); }
+.mc-l3 { --mc-color:#10b981; --mc-border:rgba(16,185,129,.2); --mc-bg:rgba(16,185,129,.05); --mc-glow:rgba(16,185,129,.2); }
+.mc-l4 { --mc-color:#8b5cf6; --mc-border:rgba(139,92,246,.2); --mc-bg:rgba(139,92,246,.05); --mc-glow:rgba(139,92,246,.2); }
+
+.mc-layer { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--mc-color); margin-bottom:6px; }
+.mc-name { font-size:15px; font-weight:700; color:#fff; margin-bottom:8px; }
+.mc-purpose { font-size:12px; color:var(--muted); margin-bottom:8px; line-height:1.5; }
+.mc-meta { display:flex; flex-wrap:wrap; gap:6px; }
+.mc-badge { padding:3px 8px; border-radius:4px; font-size:10px; font-family:'JetBrains Mono',monospace; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); color:var(--muted); }
+
+/* CONTEXT WINDOW VISUALIZATION */
+.ctx-window {
+  background:#0d1117; border:1px solid rgba(59,130,246,.2);
+  border-radius:16px; padding:24px;
+}
+.ctx-title { font-size:13px; color:var(--cc-light); letter-spacing:.1em; text-transform:uppercase; font-weight:700; margin-bottom:16px; }
+.ctx-stack { display:flex; flex-direction:column; gap:2px; }
+.ctx-seg {
+  border-radius:6px; padding:8px 12px;
+  display:flex; justify-content:space-between; align-items:center;
+  font-size:11px; font-family:'JetBrains Mono',monospace;
+  transition:all .2s; cursor:default;
+}
+.ctx-seg:hover { filter:brightness(1.3); }
+.cs-label { color:rgba(255,255,255,.7); }
+.cs-tokens { color:rgba(255,255,255,.4); }
+
+.cs-sys    { background:rgba(245,158,11,.15); }
+.cs-claude { background:rgba(245,158,11,.1); }
+.cs-mem    { background:rgba(16,185,129,.1); }
+.cs-tool   { background:rgba(59,130,246,.15); }
+.cs-hist   { background:rgba(59,130,246,.1); }
+.cs-empty  { background:rgba(255,255,255,.03); border:1px dashed rgba(255,255,255,.08); }
+
+.threshold-line {
+  position:relative; height:2px; margin:4px 0;
+  background:rgba(245,158,11,.5);
+  box-shadow:0 0 8px rgba(245,158,11,.5);
+}
+.threshold-line::after {
+  content:'70% 压缩触发线';
+  position:absolute; right:0; top:-14px;
+  font-size:9px; font-family:'JetBrains Mono',monospace;
+  color:#f59e0b;
+}
+
+/* CLAUDE.md STRUCTURE */
+.md-card {
+  background:#0d1117; border:1px solid rgba(245,158,11,.2);
+  border-radius:16px; padding:0; overflow:hidden;
+}
+.md-header { background:rgba(245,158,11,.08); border-bottom:1px solid rgba(245,158,11,.15); padding:10px 16px; display:flex; align-items:center; gap:8px; }
+.md-dot { width:8px; height:8px; border-radius:50%; background:#f59e0b; }
+.md-title { font-family:'JetBrains Mono',monospace; font-size:11px; color:#fbbf24; }
+.md-content { padding:16px; }
+.md-section { margin-bottom:12px; }
+.md-sec-head { font-size:11px; font-weight:700; color:#fbbf24; font-family:'JetBrains Mono',monospace; margin-bottom:4px; }
+.md-item { font-size:11px; color:var(--muted); padding-left:12px; border-left:2px solid rgba(245,158,11,.2); margin-bottom:2px; line-height:1.5; }
+
+/* PROMPT CACHE */
+.cache-card { background:rgba(139,92,246,.04); border:1px solid rgba(139,92,246,.2); border-radius:16px; padding:20px; }
+.cache-title { font-size:13px; color:#c084fc; letter-spacing:.1em; text-transform:uppercase; font-weight:700; margin-bottom:16px; }
+.cache-bars { display:flex; flex-direction:column; gap:10px; }
+.cache-row { }
+.cache-label { font-size:11px; color:var(--muted); margin-bottom:4px; display:flex; justify-content:space-between; }
+.cache-label span:last-child { font-family:'JetBrains Mono',monospace; font-size:10px; }
+.cache-track { height:16px; border-radius:4px; background:rgba(255,255,255,.04); overflow:hidden; }
+.cache-fill { height:100%; border-radius:4px; position:relative; overflow:hidden; }
+.cache-fill::after { content:''; position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent); animation:shimmer 2.5s infinite; }
+@keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+
+/* DECISION TREE */
+.tree-section { margin-top:40px; }
+.tree-title { font-size:13px; color:var(--cc-light); letter-spacing:.1em; text-transform:uppercase; font-weight:700; margin-bottom:20px; }
+.dtree-svg { width:100%; overflow-x:auto; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="badge"><span class="dot"></span>InsightClaudeCode · Vol.04</div>
+  <h1>记忆上下文<br><span>系统</span></h1>
+  <p class="subtitle">四层记忆宫殿 · CLAUDE.md 固定上下文 · 对话历史压缩 · Memory Files · Prompt Cache</p>
+
+  <!-- FOUR LAYER CARDS -->
+  <div class="main-grid">
+    <div class="mem-card mc-l1">
+      <div class="mc-layer">Layer 1 · 固定上下文</div>
+      <div class="mc-name">CLAUDE.md</div>
+      <div class="mc-purpose">每次启动自动加载，存放项目规范、约定、禁止事项，可提交到 git 团队共享</div>
+      <div class="mc-meta">
+        <span class="mc-badge">每次加载</span>
+        <span class="mc-badge">可 git 提交</span>
+        <span class="mc-badge">团队共享</span>
+        <span class="mc-badge">/memory 编辑</span>
+      </div>
+    </div>
+
+    <div class="mem-card mc-l2">
+      <div class="mc-layer">Layer 2 · 动态上下文</div>
+      <div class="mc-name">Dialog History</div>
+      <div class="mc-purpose">当前会话的对话历史 + 工具调用结果，随交互线性增长，70% 触发自动压缩</div>
+      <div class="mc-meta">
+        <span class="mc-badge">线性增长</span>
+        <span class="mc-badge">70% 压缩</span>
+        <span class="mc-badge">会话结束丢失</span>
+      </div>
+    </div>
+
+    <div class="mem-card mc-l3">
+      <div class="mc-layer">Layer 3 · 持久记忆</div>
+      <div class="mc-name">Memory Files</div>
+      <div class="mc-purpose">跨会话保存用户偏好、调试经验、架构决策，存于 .claude/memory/ 本地目录</div>
+      <div class="mc-meta">
+        <span class="mc-badge">跨会话</span>
+        <span class="mc-badge">本地存储</span>
+        <span class="mc-badge">不提交 git</span>
+        <span class="mc-badge">200行截断</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM ROW: Context window + CLAUDE.md + Prompt Cache -->
+  <div class="main-grid">
+
+    <!-- CONTEXT WINDOW -->
+    <div class="ctx-window">
+      <p class="ctx-title">上下文窗口（200K tokens）</p>
+      <div class="ctx-stack">
+        <div class="ctx-seg cs-sys"><span class="cs-label">System Prompt</span><span class="cs-tokens">~5K</span></div>
+        <div class="ctx-seg cs-claude"><span class="cs-label">CLAUDE.md</span><span class="cs-tokens">~8K</span></div>
+        <div class="ctx-seg cs-mem"><span class="cs-label">Memory Files</span><span class="cs-tokens">~5K</span></div>
+        <div style="height:2px; background:rgba(59,130,246,.1); margin:4px 0;"></div>
+        <div class="ctx-seg cs-tool"><span class="cs-label">工具调用结果</span><span class="cs-tokens">~35K</span></div>
+        <div class="ctx-seg cs-hist"><span class="cs-label">对话历史</span><span class="cs-tokens">~85K</span></div>
+        <div class="threshold-line"></div>
+        <div class="ctx-seg cs-empty"><span class="cs-label" style="color:rgba(255,255,255,.2);">剩余空间（新推理）</span><span class="cs-tokens" style="color:rgba(255,255,255,.2);">~62K</span></div>
+      </div>
+      <div style="margin-top:12px; font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace;">
+        总使用：138K / 200K = 69% ← 接近压缩触发
+      </div>
+    </div>
+
+    <!-- CLAUDE.md STRUCTURE -->
+    <div class="md-card">
+      <div class="md-header"><div class="md-dot"></div><span class="md-title">CLAUDE.md 典型结构</span></div>
+      <div class="md-content">
+        <div class="md-section">
+          <div class="md-sec-head">## Project Overview</div>
+          <div class="md-item">项目简介、技术栈、核心目标</div>
+        </div>
+        <div class="md-section">
+          <div class="md-sec-head">## Working Conventions</div>
+          <div class="md-item">代码风格约定（snake_case 等）</div>
+          <div class="md-item">测试要求（新函数必须有单测）</div>
+          <div class="md-item">禁止事项（不改 migrations）</div>
+        </div>
+        <div class="md-section">
+          <div class="md-sec-head">## Architecture Notes</div>
+          <div class="md-item">关键文件路径、模块职责</div>
+          <div class="md-item">依赖关系、数据流向</div>
+        </div>
+        <div class="md-section">
+          <div class="md-sec-head">## Memory Section</div>
+          <div class="md-item">Claude 自动维护的决策记录</div>
+        </div>
+        <div style="margin-top:12px; padding:8px 12px; border-radius:6px; background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.2);">
+          <div style="font-size:10px; color:#fbbf24; font-family:'JetBrains Mono',monospace;">加载优先级</div>
+          <div style="font-size:11px; color:var(--muted); margin-top:4px;">当前目录 → 父目录 → ~/.claude/CLAUDE.md</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROMPT CACHE -->
+    <div class="cache-card">
+      <p class="cache-title">Prompt Cache 命中率</p>
+      <div class="cache-bars">
+        <div class="cache-row">
+          <div class="cache-label"><span>System Prompt</span><span style="color:#c084fc;">~95%</span></div>
+          <div class="cache-track"><div class="cache-fill" style="width:95%; background:linear-gradient(90deg, #5b21b6, #8b5cf6);"></div></div>
+        </div>
+        <div class="cache-row">
+          <div class="cache-label"><span>CLAUDE.md</span><span style="color:#c084fc;">~92%</span></div>
+          <div class="cache-track"><div class="cache-fill" style="width:92%; background:linear-gradient(90deg, #5b21b6, #8b5cf6);"></div></div>
+        </div>
+        <div class="cache-row">
+          <div class="cache-label"><span>Memory Files</span><span style="color:#60a5fa;">~85%</span></div>
+          <div class="cache-track"><div class="cache-fill" style="width:85%; background:linear-gradient(90deg, #1d4ed8, #3b82f6);"></div></div>
+        </div>
+        <div class="cache-row">
+          <div class="cache-label"><span>对话早期历史</span><span style="color:#34d399;">~55%</span></div>
+          <div class="cache-track"><div class="cache-fill" style="width:55%; background:linear-gradient(90deg, #065f46, #10b981);"></div></div>
+        </div>
+        <div class="cache-row">
+          <div class="cache-label"><span>最近工具结果</span><span style="color:#fbbf24;">~15%</span></div>
+          <div class="cache-track"><div class="cache-fill" style="width:15%; background:linear-gradient(90deg, #92400e, #f59e0b);"></div></div>
+        </div>
+      </div>
+      <div style="margin-top:16px; padding:10px 12px; border-radius:8px; background:rgba(139,92,246,.08); border:1px solid rgba(139,92,246,.2);">
+        <div style="font-size:10px; color:#c084fc; font-family:'JetBrains Mono',monospace; margin-bottom:4px;">成本优化效果</div>
+        <div style="font-size:12px; color:var(--muted);">缓存命中内容 <strong style="color:#c084fc;">0 费用</strong>，高频使用下<br>可节省 <strong style="color:#c084fc;">40-60%</strong> 的 token 费用</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- DECISION TREE -->
+  <div class="tree-section">
+    <p class="tree-title">信息放置决策树</p>
+    <svg viewBox="0 0 1000 300" style="width:100%;min-width:800px;display:block;">
+      <defs>
+        <marker id="darr" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto">
+          <polygon points="0 0, 6 2.5, 0 5" fill="#3b82f6"/>
+        </marker>
+      </defs>
+
+      <!-- Root -->
+      <rect x="400" y="10" width="200" height="44" rx="8" fill="rgba(59,130,246,.12)" stroke="rgba(59,130,246,.4)" stroke-width="1"/>
+      <text x="500" y="30" text-anchor="middle" font-family="'Space Grotesk',sans-serif" font-size="12" fill="#e2e8f0" font-weight="600">有一条信息需要存储</text>
+      <text x="500" y="46" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="10" fill="#475569">该放在哪里？</text>
+
+      <!-- Q1 -->
+      <line x1="500" y1="54" x2="500" y2="90" stroke="#3b82f6" stroke-width="1" marker-end="url(#darr)"/>
+      <rect x="340" y="90" width="320" height="36" rx="6" fill="rgba(255,255,255,.04)" stroke="rgba(255,255,255,.1)" stroke-width="1"/>
+      <text x="500" y="112" text-anchor="middle" font-family="'Space Grotesk',sans-serif" font-size="12" fill="#cbd5e1">是否需要跨会话持久保存？</text>
+
+      <!-- Q1 → No -->
+      <line x1="340" y1="108" x2="140" y2="140" stroke="#f87171" stroke-width="1" marker-end="url(#darr)"/>
+      <text x="240" y="132" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#f87171">否</text>
+      <rect x="40" y="140" width="200" height="44" rx="8" fill="rgba(239,68,68,.08)" stroke="rgba(239,68,68,.3)" stroke-width="1"/>
+      <text x="140" y="158" text-anchor="middle" font-family="'Space Grotesk',sans-serif" font-size="11" fill="#fca5a5" font-weight="600">直接在对话中使用</text>
+      <text x="140" y="174" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#475569">无需存储</text>
+
+      <!-- Q1 → Yes -->
+      <line x1="660" y1="108" x2="750" y2="140" stroke="#34d399" stroke-width="1" marker-end="url(#darr)"/>
+      <text x="720" y="132" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#34d399">是</text>
+
+      <!-- Q2 -->
+      <rect x="600" y="140" width="300" height="36" rx="6" fill="rgba(255,255,255,.04)" stroke="rgba(255,255,255,.1)" stroke-width="1"/>
+      <text x="750" y="162" text-anchor="middle" font-family="'Space Grotesk',sans-serif" font-size="11" fill="#cbd5e1">是否是所有人都应遵守的规范？</text>
+
+      <!-- Q2 → Yes → CLAUDE.md -->
+      <line x1="900" y1="158" x2="950" y2="190" stroke="#f59e0b" stroke-width="1" marker-end="url(#darr)"/>
+      <text x="940" y="182" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#f59e0b">是</text>
+      <rect x="870" y="190" width="110" height="44" rx="8" fill="rgba(245,158,11,.1)" stroke="rgba(245,158,11,.4)" stroke-width="1.5"/>
+      <text x="925" y="210" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="11" fill="#fbbf24" font-weight="bold">CLAUDE.md</text>
+      <text x="925" y="226" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#78716c">提交 git</text>
+
+      <!-- Q2 → No → Memory Files -->
+      <line x1="600" y1="158" x2="550" y2="210" stroke="#10b981" stroke-width="1" marker-end="url(#darr)"/>
+      <text x="565" y="192" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#10b981">否</text>
+      <rect x="430" y="210" width="240" height="44" rx="8" fill="rgba(16,185,129,.08)" stroke="rgba(16,185,129,.3)" stroke-width="1.5"/>
+      <text x="550" y="230" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="11" fill="#34d399" font-weight="bold">Memory Files</text>
+      <text x="550" y="247" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="9" fill="#475569">.claude/memory/ · 本地</text>
+
+      <!-- Labels -->
+      <text x="500" y="290" text-anchor="middle" font-family="'Space Grotesk',sans-serif" font-size="11" fill="#475569">⚠ 可从代码重新推断的信息 → 不需要存储</text>
+    </svg>
+  </div>
+
+</div>
+</body>
+</html>

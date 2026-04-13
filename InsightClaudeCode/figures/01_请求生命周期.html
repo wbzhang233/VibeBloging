@@ -1,0 +1,381 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code · 请求生命周期 · 从用户输入到最终输出</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #020409;
+  --cc: #3b82f6;
+  --text: #e2e8f0;
+  --muted: #4b5563;
+  --green: #10b981;
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --purple: #8b5cf6;
+  --cyan: #06b6d4;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+body::before {
+  content:''; position:fixed; inset:0;
+  background:
+    radial-gradient(ellipse 50% 50% at 50% 0%, rgba(59,130,246,.05) 0%, transparent 60%),
+    linear-gradient(rgba(59,130,246,.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59,130,246,.012) 1px, transparent 1px);
+  background-size:auto,40px 40px,40px 40px; z-index:0; pointer-events:none;
+}
+.page { position:relative; z-index:1; padding:32px 24px 80px; max-width:1400px; margin:0 auto; }
+.badge { display:inline-flex; align-items:center; gap:8px; border:1px solid rgba(59,130,246,.3); background:rgba(59,130,246,.08); padding:4px 14px; border-radius:100px; font-size:13px; color:#60a5fa; letter-spacing:.15em; text-transform:uppercase; font-family:'JetBrains Mono',monospace; margin-bottom:14px; }
+.dot { width:6px; height:6px; border-radius:50%; background:#3b82f6; animation:pulse 2s infinite; }
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(59,130,246,.5)}50%{box-shadow:0 0 0 8px rgba(59,130,246,0)}}
+h1 { font-size:clamp(24px,4vw,48px); font-weight:700; line-height:1.1; margin-bottom:6px; }
+h1 .hl { color:#60a5fa; }
+.subtitle { color:var(--muted); font-size:13px; font-family:'JetBrains Mono',monospace; margin-bottom:40px; }
+
+/* LIFECYCLE PIPELINE */
+.pipeline { display:flex; flex-direction:column; gap:0; }
+.stage {
+  display:grid; grid-template-columns:200px 1fr;
+  border-left:3px solid var(--s-color);
+  margin-left:20px; position:relative;
+}
+.stage::before {
+  content:''; position:absolute; left:-7px; top:20px;
+  width:11px; height:11px; border-radius:50%;
+  background:var(--s-color); box-shadow:0 0 12px var(--s-color);
+}
+.stage-meta {
+  padding:14px 16px 14px 24px;
+  border-right:1px solid rgba(255,255,255,.04);
+}
+.stage-num { font-size:13px; font-family:'JetBrains Mono',monospace; color:var(--s-color); letter-spacing:.15em; margin-bottom:4px; }
+.stage-name { font-size:13px; font-weight:700; color:#fff; line-height:1.2; margin-bottom:4px; }
+.stage-src { font-size:13px; font-family:'JetBrains Mono',monospace; color:var(--muted); }
+.stage-body { padding:14px 20px; }
+.stage-desc { font-size:13px; color:#94a3b8; line-height:1.6; margin-bottom:10px; }
+
+/* STAGE COLORS */
+.s-init  { --s-color:#3b82f6; }
+.s-assem { --s-color:#8b5cf6; }
+.s-api   { --s-color:#06b6d4; }
+.s-route { --s-color:#f59e0b; }
+.s-perm  { --s-color:#ef4444; }
+.s-hooks { --s-color:#f59e0b; }
+.s-exec  { --s-color:#3b82f6; }
+.s-result{ --s-color:#10b981; }
+.s-compact{ --s-color:#8b5cf6; }
+.s-out   { --s-color:#10b981; }
+
+/* STATE BOX */
+.state-box {
+  background:#0a0f1a; border:1px solid rgba(59,130,246,.15);
+  border-radius:8px; padding:10px 14px; margin-top:8px;
+  font-family:'JetBrains Mono',monospace; font-size:13px;
+  line-height:1.7; color:#64748b;
+}
+.state-box .k { color:#c084fc; }
+.state-box .v { color:#86efac; }
+.state-box .c { color:#374151; }
+.state-box .h { color:#60a5fa; }
+.state-box .r { color:#f87171; }
+.state-box .g { color:#34d399; }
+
+/* DECISION */
+.decision-row { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
+.decision-item { padding:5px 12px; border-radius:6px; font-size:13px; font-family:'JetBrains Mono',monospace; border:1px solid var(--d-border); background:var(--d-bg); color:var(--d-color); }
+.d-allow { --d-color:#34d399; --d-border:rgba(16,185,129,.3); --d-bg:rgba(16,185,129,.08); }
+.d-deny  { --d-color:#f87171; --d-border:rgba(239,68,68,.3); --d-bg:rgba(239,68,68,.08); }
+.d-ask   { --d-color:#fbbf24; --d-border:rgba(245,158,11,.3); --d-bg:rgba(245,158,11,.08); }
+.d-next  { --d-color:#60a5fa; --d-border:rgba(59,130,246,.3); --d-bg:rgba(59,130,246,.08); }
+
+/* CONNECTOR */
+.connector { margin-left:20px; padding-left:24px; border-left:3px solid rgba(255,255,255,.05); }
+.connector-line { display:flex; align-items:center; gap:6px; padding:4px 0; }
+.c-arrow { color:#3b82f6; font-size:13px; }
+.c-label { font-size:13px; font-family:'JetBrains Mono',monospace; color:var(--muted); }
+
+/* TRANSITION BADGE */
+.transition { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:4px; font-size:13px; font-family:'JetBrains Mono',monospace; background:rgba(59,130,246,.1); border:1px solid rgba(59,130,246,.25); color:#60a5fa; margin:4px 4px 4px 0; }
+.transition.t-tool { background:rgba(16,185,129,.1); border-color:rgba(16,185,129,.25); color:#34d399; }
+.transition.t-compact { background:rgba(139,92,246,.1); border-color:rgba(139,92,246,.25); color:#c084fc; }
+.transition.t-recover { background:rgba(245,158,11,.1); border-color:rgba(245,158,11,.25); color:#fbbf24; }
+
+/* TWO PANEL */
+.two-panel { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:28px; }
+@media(max-width:800px){.two-panel{grid-template-columns:1fr}}
+.panel { background:rgba(0,0,0,.3); border:1px solid rgba(255,255,255,.06); border-radius:12px; padding:18px; }
+.panel-title { font-size:13px; color:#60a5fa; letter-spacing:.12em; text-transform:uppercase; font-family:'JetBrains Mono',monospace; margin-bottom:14px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="badge"><span class="dot"></span>InsightClaudeCode · Figures · Vol.01</div>
+  <h1>请求生命周期<br><span class="hl">从用户输入到最终输出的完整垂直流</span></h1>
+  <p class="subtitle">基于 s00b-one-request-lifecycle · QueryEngine.ts · query.ts 深度解析</p>
+
+  <div class="pipeline">
+
+    <!-- STAGE 0 -->
+    <div class="stage s-init">
+      <div class="stage-meta">
+        <div class="stage-num">STAGE 0</div>
+        <div class="stage-name">用户输入进入</div>
+        <div class="stage-src">QueryEngine.processUserInput()</div>
+      </div>
+      <div class="stage-body">
+        <div class="stage-desc">用户消息首先经过预处理。斜杠命令（/commit, /review等）在此拦截直接处理，不进入主API循环。普通消息转换为 SDKMessage 进入 QueryEngine。</div>
+        <div class="state-box"><span class="c">// 初始化 QueryState</span><br><span class="k">messages</span>: [<span class="v">{"role":"user","content":"..."}</span>]<br><span class="k">turn_count</span>: <span class="v">1</span><br><span class="k">transition</span>: <span class="v">None</span><br><span class="k">continuation_count</span>: <span class="v">0</span><br><span class="k">has_attempted_compact</span>: <span class="v">False</span></div>
+      </div>
+    </div>
+    <div class="connector"><div class="connector-line"><span class="c-arrow">↓</span><span class="c-label">SDKMessage async generator 开始</span></div></div>
+
+    <!-- STAGE 1 -->
+    <div class="stage s-assem">
+      <div class="stage-meta">
+        <div class="stage-num">STAGE 1</div>
+        <div class="stage-name">提示组装</div>
+        <div class="stage-src">fetchSystemPromptParts() · src/utils/queryContext.ts</div>
+      </div>
+      <div class="stage-body">
+        <div class="stage-desc">3路并行调用组装完整 API Payload。注意：自定义提示会完全替换默认系统提示（不合并）。</div>
+        <div class="state-box">
+<span class="c">// 并行执行（Promise.all）</span><br>
+<span class="k">systemPrompt</span>  ← <span class="g">getSystemPrompt()</span>    <span class="c">// 核心指令 ~5K tokens</span><br>
+<span class="k">userContext</span>   ← <span class="g">getUserContext()</span>    <span class="c">// Memory Files ~5K tokens</span><br>
+<span class="k">systemContext</span> ← <span class="g">getSystemContext()</span>  <span class="c">// 环境/CLAUDE.md ~8K tokens</span><br>
+<br>
+<span class="c">// 最终 API Payload</span><br>
+<span class="k">system blocks</span> + <span class="k">normalized messages</span> + <span class="k">memory attachments</span><br>
++ <span class="k">reminder injections</span> + <span class="k">tool definitions</span>
+        </div>
+      </div>
+    </div>
+    <div class="connector"><div class="connector-line"><span class="c-arrow">↓</span><span class="c-label">完整 API Payload → Anthropic API</span></div></div>
+
+    <!-- STAGE 2 -->
+    <div class="stage s-api">
+      <div class="stage-meta">
+        <div class="stage-num">STAGE 2</div>
+        <div class="stage-name">模型推理</div>
+        <div class="stage-src">claude_api(messages) · Anthropic SDK</div>
+      </div>
+      <div class="stage-body">
+        <div class="stage-desc">Claude 模型接收完整上下文进行推理。输出只有两种类型：普通文本答案（请求可能在此结束）或工具调用意图（进入工具控制平面）。</div>
+        <div class="decision-row">
+          <div class="decision-item d-next">→ 普通文本 (text)</div>
+          <div class="decision-item d-allow">→ 工具调用意图 (tool_use)</div>
+        </div>
+        <div class="state-box"><span class="c">// doesMostRecentAssistantMessageExceed200k()?</span><br><span class="k">if</span> output > 200K: <span class="r">ESCALATED_MAX_TOKENS</span> 恢复流程<br><span class="k">MAX_OUTPUT_TOKENS_RECOVERY_LIMIT</span> = <span class="v">3</span>  <span class="c">// 最多重试3次</span></div>
+      </div>
+    </div>
+    <div class="connector"><div class="connector-line"><span class="c-arrow">↓</span><span class="c-label">tool_use → 进入工具控制平面</span></div></div>
+
+    <!-- STAGE 3 -->
+    <div class="stage s-route">
+      <div class="stage-meta">
+        <div class="stage-num">STAGE 3</div>
+        <div class="stage-name">工具路由</div>
+        <div class="stage-src">runTools() · src/query.ts</div>
+      </div>
+      <div class="stage-body">
+        <div class="stage-desc">根据工具名前缀路由到不同执行目标。工具名决定了执行路径。</div>
+        <div class="state-box">
+<span class="k">if</span> tool_name.<span class="h">startswith</span>(<span class="v">"mcp__"</span>)   → <span class="g">MCP Server</span>  (JSON-RPC 2.0)<br>
+<span class="k">elif</span> tool_name == <span class="v">"Agent"</span>          → <span class="g">Sub-Agent</span>   (独立上下文)<br>
+<span class="k">elif</span> tool_name.<span class="h">startswith</span>(<span class="v">"task_"</span>) → <span class="g">Task System</span> (TaskRecord)<br>
+<span class="k">elif</span> tool_name == <span class="v">"SendMessage"</span>    → <span class="g">Teammate</span>    (JSONL inbox)<br>
+<span class="k">else</span>                               → <span class="g">Native Tool</span> (本地执行)
+        </div>
+      </div>
+    </div>
+    <div class="connector"><div class="connector-line"><span class="c-arrow">↓</span><span class="c-label">路由确定后 → 权限检查</span></div></div>
+
+    <!-- STAGE 4 -->
+    <div class="stage s-perm">
+      <div class="stage-meta">
+        <div class="stage-num">STAGE 4</div>
+        <div class="stage-name">权限决策</div>
+        <div class="stage-src">useCanUseTool.tsx · 5阶段处理链</div>
+      </div>
+      <div class="stage-body">
+        <div class="stage-desc">5个权限处理程序按序执行，第一个产生明确决策的处理程序获胜。Deny rules 永远优先，无法绕过。</div>
+        <div class="state-box">
+Handler 1: <span class="k">Config Rules</span>    → settings.json allow/deny 第一匹配胜出<br>
+Handler 2: <span class="k">BASH_CLASSIFIER</span> → ML分类器（<span class="r">DANGEROUS_BASH_PATTERNS</span>）并发竞态<br>
+Handler 3: <span class="k">Coordinator</span>    → 仅 Coordinator 模式（更高权限）<br>
+Handler 4: <span class="k">SwarmWorker</span>    → 仅 Worker 模式（受限权限）<br>
+Handler 5: <span class="k">Interactive</span>    → 弹出用户确认框（队列化防并发）
+        </div>
+        <div class="decision-row">
+          <div class="decision-item d-allow">allow → 继续</div>
+          <div class="decision-item d-deny">deny → 返回错误</div>
+          <div class="decision-item d-ask">ask → 用户确认</div>
+        </div>
+        <div style="margin-top:8px;font-size:13px;color:#374151;font-family:'JetBrains Mono',monospace;">permissionDenials[] 追踪拒绝记录 · 连续3次 → 断路器 → 建议切换 plan mode</div>
+      </div>
+    </div>
+    <div class="connector"><div class="connector-line"><span class="c-arrow">↓</span><span class="c-label">权限通过 → PreToolUse Hooks</span></div></div>
+
+    <!-- STAGE 5 -->
+    <div class="stage s-hooks">
+      <div class="stage-meta">
+        <div class="stage-num">STAGE 5</div>
+        <div class="stage-name">PreToolUse Hooks</div>
+        <div class="stage-src">src/services/tools/toolHooks.ts</div>
+      </div>
+      <div class="stage-body">
+        <div class="stage-desc">执行所有匹配的 PreToolUse 钩子脚本。支持3种退出码协议，以及 JSON 格式的高级阻止决策。</div>
+        <div class="state-box">
+exit <span class="v">0</span>  → 继续执行工具（静默通过）<br>
+exit <span class="r">1</span>  → 阻止工具执行，stderr 作为错误原因<br>
+exit <span class="g">2</span>  → stderr 注入对话，工具仍然执行<br>
+<span class="k">echo</span> <span class="v">'{"decision":"block","reason":"..."}'</span>  → JSON高级阻止
+        </div>
+      </div>
+    </div>
+    <div class="connector"><div class="connector-line"><span class="c-arrow">↓</span><span class="c-label">Hooks 通过 → 工具执行</span></div></div>
+
+    <!-- STAGE 6 -->
+    <div class="stage s-exec">
+      <div class="stage-meta">
+        <div class="stage-num">STAGE 6</div>
+        <div class="stage-name">工具执行</div>
+        <div class="stage-src">StreamingToolExecutor · 并发模型</div>
+      </div>
+      <div class="stage-body">
+        <div class="stage-desc">StreamingToolExecutor 根据 isConcurrencySafe 标志决定并发策略。并发安全工具（Read/Grep/Glob等）并行执行，非并发工具（Bash/Write等）独占串行。</div>
+        <div class="state-box">
+<span class="c">// 并发安全 → 并行执行</span><br>
+<span class="g">Read(a) ║ Read(b) ║ Glob(.) ║ Grep(*)</span>  <span class="c">// 同时运行</span><br>
+<br>
+<span class="c">// 非并发 → 串行独占</span><br>
+<span class="r">Bash(cmd1)</span> → <span class="r">Bash(cmd2)</span>  <span class="c">// 按序执行</span><br>
+<br>
+siblingAbortController: Bash失败 → 终止所有兄弟子进程<br>
+结果按原始请求顺序缓冲排序后输出
+        </div>
+      </div>
+    </div>
+    <div class="connector"><div class="connector-line"><span class="c-arrow">↓</span><span class="c-label">工具执行完成 → PostToolUse Hooks</span></div></div>
+
+    <!-- STAGE 7 -->
+    <div class="stage s-result">
+      <div class="stage-meta">
+        <div class="stage-num">STAGE 7</div>
+        <div class="stage-name">结果注入与状态更新</div>
+        <div class="stage-src">messages.append(tool_result) · 平台状态更新</div>
+      </div>
+      <div class="stage-body">
+        <div class="stage-desc">工具结果不只是追加文本。一次工具调用可能同时更新多个平台状态层。</div>
+        <div class="state-box">
+tool_result → messages.append({<br>
+  <span class="k">role</span>: <span class="v">"tool"</span>,<br>
+  <span class="k">tool_use_id</span>: <span class="v">"..."</span>,<br>
+  <span class="k">content</span>: <span class="v">"..."</span><br>
+})<br><br>
+同时可能更新:<br>
+  <span class="g">TaskRecord</span>         (任务板状态)<br>
+  <span class="g">RuntimeTaskState</span>   (运行时执行槽)<br>
+  <span class="g">MemoryEntry</span>        (记忆记录)<span class="c"> [EXTRACT_MEMORIES gate]</span><br>
+  <span class="g">WorktreeRecord</span>     (Worktree记录)<br>
+  <span class="g">FileStateCache</span>     (文件变更追踪)
+        </div>
+        <div style="margin-top:8px;">
+          <span class="transition t-tool">tool_result_continuation</span>
+          <span class="transition t-recover">max_tokens_recovery</span>
+          <span class="transition t-compact">compact_retry</span>
+          <span class="transition">transport_retry</span>
+        </div>
+      </div>
+    </div>
+    <div class="connector"><div class="connector-line"><span class="c-arrow">↓</span><span class="c-label">state.transition 写入 → turn_count++ → 下一轮推理</span></div></div>
+
+    <!-- STAGE 8 -->
+    <div class="stage s-compact">
+      <div class="stage-meta">
+        <div class="stage-num">STAGE 8</div>
+        <div class="stage-name">上下文压缩（条件触发）</div>
+        <div class="stage-src">src/services/compact/autoCompact.ts</div>
+      </div>
+      <div class="stage-body">
+        <div class="stage-desc">每轮推理前先执行 microCompact（静默），若 tokens 超过阈值则触发更大规模压缩。</div>
+        <div class="state-box">
+<span class="c">// 每轮前静默执行</span><br>
+microCompact(messages)  <span class="c">// 旧tool_result → "[Previous: used {name}]"</span><br><br>
+<span class="c">// 条件触发（按优先级）</span><br>
+tokens > <span class="k">AUTOCOMPACT_BUFFER_TOKENS</span>(<span class="v">13K</span>) + threshold → autoCompact<br>
+tokens > <span class="k">WARNING_THRESHOLD_BUFFER_TOKENS</span>(<span class="v">20K</span>)  → 显示警告<br>
+<span class="k">HISTORY_SNIP</span> gate → snipCompact（外科手术式裁剪）<br>
+<span class="k">REACTIVE_COMPACT</span> gate → reactiveCompact<br>
+<span class="k">CONTEXT_COLLAPSE</span> gate → contextCollapse<br><br>
+断路器: MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES = <span class="r">3</span>
+        </div>
+      </div>
+    </div>
+    <div class="connector"><div class="connector-line"><span class="c-arrow">↓</span><span class="c-label">压缩完成 → 继续推理 or 最终输出</span></div></div>
+
+    <!-- STAGE 9 -->
+    <div class="stage s-out">
+      <div class="stage-meta">
+        <div class="stage-num">STAGE 9</div>
+        <div class="stage-name">最终输出</div>
+        <div class="stage-src">display_output() → Stop Hooks → SessionStorage</div>
+      </div>
+      <div class="stage-body">
+        <div class="stage-desc">当模型输出纯文本（无工具调用）时请求生命周期结束。触发 Stop Hooks，SessionStorage 持久化会话记录。</div>
+        <div class="state-box">
+display_output(response)         <span class="c">// 流式输出到终端</span><br>
+run_stop_hooks()                  <span class="c">// Stop Hooks 触发</span><br>
+SessionStorage.recordTranscript() <span class="c">// 持久化对话记录</span><br>
+SessionStorage.flushSessionStorage() <span class="c">// 写入磁盘</span><br>
+user_input = wait_input()         <span class="c">// 等待下一个用户输入</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- QUERY STATE TRANSITION MODEL -->
+  <div class="two-panel">
+    <div class="panel">
+      <div class="panel-title">QueryState 控制平面状态机</div>
+      <div class="state-box">
+<span class="c">// 状态 vs 内容 的严格分离</span><br><br>
+<span class="c">【内容状态 Content State】</span><br>
+<span class="k">messages[]</span>           对话历史<br>
+<span class="k">tool_result</span>          工具输出<br>
+<span class="k">memory text</span>         记忆内容<br><br>
+<span class="c">【控制状态 Process-Control State】</span><br>
+<span class="k">turn_count</span>           当前轮次<br>
+<span class="k">transition</span>           继续原因（TransitionReason）<br>
+<span class="k">continuation_count</span>   继续次数（防无限循环）<br>
+<span class="k">has_attempted_compact</span> 压缩标志（防重复压缩）<br>
+<span class="k">max_output_tokens_override</span> 临时token限制
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">三层架构（请求 = 哪一层负责？）</div>
+      <div class="state-box">
+<span class="h">【查询循环层 Query Loop Layer】</span><br>
+  拥有: 多轮次请求过程<br>
+  管理: QueryState + TransitionReason<br>
+  <br>
+<span class="g">【工具控制平面 Tool Control Plane】</span><br>
+  拥有: 路由 + 权限 + Hooks + 执行上下文<br>
+  核心: ToolUseContext（共享执行环境）<br>
+  <br>
+<span class="r">【平台状态层 Platform State Layer】</span><br>
+  拥有: 持久记录（durable records）<br>
+  包含: Task / RuntimeSlot / Teammate<br>
+         Worktree / MCP Config / Memory
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

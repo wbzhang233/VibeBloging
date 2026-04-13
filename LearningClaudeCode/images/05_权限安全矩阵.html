@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code · 权限安全矩阵</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #030712;
+  --cc: #3b82f6;
+  --cc-light: #60a5fa;
+  --text: #e2e8f0;
+  --muted: #475569;
+  --glass: rgba(59,130,246,.06);
+  --glass-border: rgba(59,130,246,.18);
+  --danger: #ef4444;
+  --warn: #f59e0b;
+  --safe: #10b981;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+body::before {
+  content:''; position:fixed; inset:0;
+  background:
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(239,68,68,.06) 0%, transparent 60%),
+    linear-gradient(rgba(59,130,246,.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59,130,246,.02) 1px, transparent 1px);
+  background-size: auto, 50px 50px, 50px 50px;
+  z-index:0; pointer-events:none;
+}
+.page { position:relative; z-index:1; max-width:1400px; margin:0 auto; padding:40px 24px 80px; }
+
+.badge { display:inline-flex; align-items:center; gap:8px; border:1px solid rgba(239,68,68,.3); background:rgba(239,68,68,.08); padding:5px 14px; border-radius:100px; font-size:11px; color:#fca5a5; letter-spacing:.1em; text-transform:uppercase; margin-bottom:20px; font-family:'JetBrains Mono',monospace; }
+.badge .dot { width:6px; height:6px; border-radius:50%; background:var(--danger); animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.5)} 50%{box-shadow:0 0 0 8px rgba(239,68,68,0)} }
+h1 { font-size:clamp(32px,5vw,64px); font-weight:700; line-height:1.05; color:#fff; margin-bottom:10px; }
+h1 span { color:#fca5a5; }
+.subtitle { color:var(--muted); font-size:16px; max-width:700px; margin-bottom:48px; line-height:1.7; }
+
+/* MAIN GRID */
+.main-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:40px; }
+@media(max-width:900px){ .main-grid{grid-template-columns:1fr;} }
+
+/* CONCENTRIC PERMISSION BOXES */
+.perm-box-section {
+  background:rgba(239,68,68,.03); border:1px solid rgba(239,68,68,.15);
+  border-radius:20px; padding:24px;
+}
+.perm-title { font-size:13px; color:#fca5a5; letter-spacing:.1em; text-transform:uppercase; font-weight:700; margin-bottom:20px; }
+
+.perm-box-wrapper { position:relative; padding:16px; }
+.perm-box {
+  border-radius:12px; padding:16px;
+  border:1px solid var(--pb-border);
+  background:var(--pb-bg);
+  margin-bottom:0;
+}
+.pb-global { --pb-border:rgba(239,68,68,.4); --pb-bg:rgba(239,68,68,.05); }
+.pb-project { --pb-border:rgba(245,158,11,.35); --pb-bg:rgba(245,158,11,.05); margin:12px; }
+.pb-runtime { --pb-border:rgba(59,130,246,.35); --pb-bg:rgba(59,130,246,.05); margin:12px; }
+.pb-once { --pb-border:rgba(16,185,129,.35); --pb-bg:rgba(16,185,129,.05); margin:8px; }
+.pb-once-inner { padding:12px; border-radius:8px; background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.3); text-align:center; }
+
+.pb-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.pb-num { width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; font-family:'JetBrains Mono',monospace; flex-shrink:0; }
+.pbn1 { background:rgba(239,68,68,.2); color:#fca5a5; border:1px solid rgba(239,68,68,.4); }
+.pbn2 { background:rgba(245,158,11,.2); color:#fbbf24; border:1px solid rgba(245,158,11,.4); }
+.pbn3 { background:rgba(59,130,246,.2); color:#60a5fa; border:1px solid rgba(59,130,246,.4); }
+.pbn4 { background:rgba(16,185,129,.2); color:#34d399; border:1px solid rgba(16,185,129,.4); }
+.pb-name { font-size:13px; font-weight:700; color:#fff; }
+.pb-path { font-size:10px; font-family:'JetBrains Mono',monospace; color:var(--muted); }
+
+/* DANGER ZONE */
+.danger-zone { background:rgba(239,68,68,.04); border:1px solid rgba(239,68,68,.2); border-radius:16px; padding:20px; }
+.dz-title { font-size:13px; color:#fca5a5; letter-spacing:.1em; text-transform:uppercase; font-weight:700; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+.dz-list { display:flex; flex-direction:column; gap:6px; }
+.dz-item {
+  display:flex; align-items:center; gap:10px;
+  padding:8px 12px; border-radius:8px;
+  background:rgba(239,68,68,.06); border:1px solid rgba(239,68,68,.15);
+  font-family:'JetBrains Mono',monospace; font-size:11px;
+  transition:all .2s; cursor:default;
+}
+.dz-item:hover { background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.35); }
+.dz-item:hover .dz-cmd { animation:glitch .1s; }
+@keyframes glitch { 0%{transform:translateX(0)} 25%{transform:translateX(-2px)} 75%{transform:translateX(2px)} 100%{transform:translateX(0)} }
+.dz-icon { width:20px; height:20px; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:11px; flex-shrink:0; }
+.di-deny  { background:rgba(239,68,68,.2); }
+.di-warn  { background:rgba(245,158,11,.2); }
+.dz-cmd { color:#fca5a5; flex:1; }
+.dz-level { font-size:9px; padding:2px 6px; border-radius:4px; }
+.dl-deny  { background:rgba(239,68,68,.2); color:#fca5a5; border:1px solid rgba(239,68,68,.3); }
+.dl-warn  { background:rgba(245,158,11,.2); color:#fbbf24; border:1px solid rgba(245,158,11,.3); }
+
+/* CONFIG EXAMPLE */
+.config-section { background:#0d1117; border:1px solid rgba(59,130,246,.2); border-radius:16px; padding:0; overflow:hidden; }
+.config-header { background:rgba(59,130,246,.06); border-bottom:1px solid rgba(59,130,246,.15); padding:10px 16px; display:flex; align-items:center; gap:8px; }
+.config-dots { display:flex; gap:6px; }
+.config-dots span { width:10px; height:10px; border-radius:50%; }
+.config-body { padding:16px; overflow-x:auto; }
+pre { font-family:'JetBrains Mono',monospace; font-size:11px; line-height:1.7; color:#94a3b8; white-space:pre; }
+.jk { color:#c084fc; }
+.js { color:#86efac; }
+.jc { color:#4b5563; }
+
+/* RISK HEATMAP */
+.heatmap-section { margin-top:32px; }
+.hm-title { font-size:13px; color:var(--cc-light); letter-spacing:.1em; text-transform:uppercase; font-weight:700; margin-bottom:16px; }
+.hm-table { width:100%; border-collapse:collapse; }
+.hm-table th { padding:10px 16px; font-size:11px; color:var(--muted); text-align:center; }
+.hm-table td { padding:8px 16px; text-align:center; font-size:11px; font-family:'JetBrains Mono',monospace; font-weight:600; border-radius:4px; }
+.hm-table td:first-child { text-align:left; color:var(--text); font-family:'Space Grotesk',sans-serif; font-weight:500; }
+.r-low  { background:rgba(16,185,129,.12); color:#34d399; }
+.r-med  { background:rgba(245,158,11,.12); color:#fbbf24; }
+.r-high { background:rgba(239,68,68,.12); color:#fca5a5; }
+.r-crit { background:rgba(239,68,68,.25); color:#ef4444; }
+
+/* PLAN MODE */
+.plan-mode-section { margin-top:32px; }
+.pm-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+@media(max-width:700px){ .pm-grid{grid-template-columns:1fr;} }
+.pm-card { border-radius:12px; padding:16px; border:1px solid var(--pmc-border); background:var(--pmc-bg); }
+.pm-explore { --pmc-border:rgba(59,130,246,.25); --pmc-bg:rgba(59,130,246,.05); }
+.pm-execute { --pmc-border:rgba(16,185,129,.25); --pmc-bg:rgba(16,185,129,.05); }
+.pm-label { font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; font-family:'JetBrains Mono',monospace; margin-bottom:6px; }
+.pm-name { font-size:14px; font-weight:700; color:#fff; margin-bottom:8px; }
+.pm-item { font-size:11px; color:var(--muted); padding:4px 0; border-bottom:1px solid rgba(255,255,255,.04); display:flex; align-items:center; gap:6px; }
+.pm-item:last-child { border-bottom:none; }
+.pm-item .pm-check { font-size:11px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="badge"><span class="dot"></span>InsightClaudeCode · Vol.05</div>
+  <h1>权限安全<br><span>矩阵</span></h1>
+  <p class="subtitle">四级权限层级 · 高危操作拦截 · 配置示例 · 风险热力图 · Plan Mode 安全隔离</p>
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+
+    <!-- CONCENTRIC PERMISSION BOXES -->
+    <div class="perm-box-section">
+      <p class="perm-title">四级权限层级（同心矩形）</p>
+      <div class="perm-box pb-global">
+        <div class="pb-header">
+          <div class="pb-num pbn1">1</div>
+          <div>
+            <div class="pb-name">Global Settings</div>
+            <div class="pb-path">~/.claude/settings.json</div>
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--muted);">全局白名单/黑名单，对所有项目和会话生效</p>
+
+        <div class="perm-box pb-project" style="margin-top:16px;">
+          <div class="pb-header">
+            <div class="pb-num pbn2">2</div>
+            <div>
+              <div class="pb-name">Project Settings</div>
+              <div class="pb-path">.claude/settings.json</div>
+            </div>
+          </div>
+          <p style="font-size:11px;color:var(--muted);">项目级权限，覆盖全局设置，可提交到 git</p>
+
+          <div class="perm-box pb-runtime" style="margin-top:16px;">
+            <div class="pb-header">
+              <div class="pb-num pbn3">3</div>
+              <div>
+                <div class="pb-name">Runtime Authorization</div>
+                <div class="pb-path">会话内临时授权</div>
+              </div>
+            </div>
+            <p style="font-size:11px;color:var(--muted);">用户在会话中批准特定操作，会话结束失效</p>
+
+            <div class="pb-once" style="margin-top:12px;">
+              <div class="pb-header">
+                <div class="pb-num pbn4">4</div>
+                <div>
+                  <div class="pb-name">One-time Approval</div>
+                  <div class="pb-path">单次允许</div>
+                </div>
+              </div>
+              <div class="pb-once-inner">
+                <div style="font-size:11px; color:#34d399; font-family:'JetBrains Mono',monospace;">仅此一次，不记录到任何配置文件</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DANGER ZONE -->
+    <div>
+      <div class="danger-zone">
+        <p class="dz-title">
+          <span style="color:#ef4444;">⚠</span>
+          高危操作拦截清单
+        </p>
+        <div class="dz-list">
+          <div class="dz-item"><div class="dz-icon di-deny">⛔</div><span class="dz-cmd">rm -rf / · rm -rf * · rm -rf ./</span><span class="dz-level dl-deny">强制拒绝</span></div>
+          <div class="dz-item"><div class="dz-icon di-deny">⛔</div><span class="dz-cmd">curl * | bash</span><span class="dz-level dl-deny">强制拒绝</span></div>
+          <div class="dz-item"><div class="dz-icon di-warn">⚡</div><span class="dz-cmd">git push --force · git push -f</span><span class="dz-level dl-warn">强制确认</span></div>
+          <div class="dz-item"><div class="dz-icon di-warn">⚡</div><span class="dz-cmd">git reset --hard · git checkout .</span><span class="dz-level dl-warn">强制确认</span></div>
+          <div class="dz-item"><div class="dz-icon di-warn">⚡</div><span class="dz-cmd">DROP TABLE · TRUNCATE *</span><span class="dz-level dl-warn">强制确认</span></div>
+          <div class="dz-item"><div class="dz-icon di-warn">⚡</div><span class="dz-cmd">.github/workflows/ 修改</span><span class="dz-level dl-warn">强制确认</span></div>
+          <div class="dz-item"><div class="dz-icon di-warn">⚡</div><span class="dz-cmd">Slack / Email / GitHub 发消息</span><span class="dz-level dl-warn">强制确认</span></div>
+          <div class="dz-item"><div class="dz-icon di-warn">⚡</div><span class="dz-cmd">~/.ssh/id_rsa 读取并外传</span><span class="dz-level dl-warn">强制确认</span></div>
+          <div class="dz-item"><div class="dz-icon di-warn">⚡</div><span class="dz-cmd">sudo · chmod 777</span><span class="dz-level dl-warn">强制确认</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIG EXAMPLE -->
+  <div class="main-grid" style="margin-top:0;">
+    <div class="config-section">
+      <div class="config-header">
+        <div class="config-dots"><span style="background:#ff5f57;"></span><span style="background:#ffbd2e;"></span><span style="background:#28ca41;"></span></div>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">~/.claude/settings.json</span>
+      </div>
+      <div class="config-body">
+        <pre><span class="jc">// 全局权限配置</span>
+{
+  <span class="jk">"permissions"</span>: {
+    <span class="jk">"allow"</span>: [
+      <span class="js">"Bash(git *)"</span>,
+      <span class="js">"Bash(npm *)"</span>,
+      <span class="js">"Bash(python *)"</span>,
+      <span class="js">"Read(*)"</span>,
+      <span class="js">"Write(*)"</span>,
+      <span class="js">"Edit(*)"</span>
+    ],
+    <span class="jk">"deny"</span>: [
+      <span class="js">"Bash(rm -rf *)"</span>,
+      <span class="js">"Bash(git push --force *)"</span>,
+      <span class="js">"Bash(curl * | bash)"</span>,
+      <span class="js">"Bash(sudo *)"</span>
+    ]
+  }
+}</pre>
+      </div>
+    </div>
+
+    <!-- PLAN MODE -->
+    <div class="plan-mode-section" style="margin-top:0;">
+      <p class="hm-title" style="margin-bottom:16px;">Plan Mode · 两阶段安全隔离</p>
+      <div class="pm-grid">
+        <div class="pm-card pm-explore">
+          <div class="pm-label" style="color:#60a5fa;">探索阶段</div>
+          <div class="pm-name">只读区</div>
+          <div class="pm-item"><span class="pm-check" style="color:#34d399;">✓</span> Read / Glob / Grep</div>
+          <div class="pm-item"><span class="pm-check" style="color:#34d399;">✓</span> WebFetch / WebSearch</div>
+          <div class="pm-item"><span class="pm-check" style="color:#34d399;">✓</span> Agent(Explore/Plan)</div>
+          <div class="pm-item"><span class="pm-check" style="color:#f87171;">✗</span> Write / Edit</div>
+          <div class="pm-item"><span class="pm-check" style="color:#f87171;">✗</span> Bash（含执行）</div>
+        </div>
+        <div class="pm-card pm-execute">
+          <div class="pm-label" style="color:#34d399;">执行阶段</div>
+          <div class="pm-name">全功能区</div>
+          <div class="pm-item"><span class="pm-check" style="color:#34d399;">✓</span> 全部工具</div>
+          <div class="pm-item"><span class="pm-check" style="color:#34d399;">✓</span> Write / Edit / Bash</div>
+          <div class="pm-item"><span class="pm-check" style="color:#34d399;">✓</span> Agent(general)</div>
+          <div class="pm-item" style="color:#fbbf24; font-size:10px; padding-top:8px;">须用户批准后进入</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RISK HEATMAP -->
+  <div class="heatmap-section">
+    <p class="hm-title">操作风险矩阵</p>
+    <table class="hm-table">
+      <thead>
+        <tr>
+          <th style="text-align:left;">工具 / 操作</th>
+          <th>可逆性</th>
+          <th>影响范围</th>
+          <th>风险级别</th>
+          <th>默认处理</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Read / Glob / Grep</td><td class="r-low">极高</td><td class="r-low">只读</td><td class="r-low">低风险</td><td class="r-low">自动允许</td></tr>
+        <tr><td>WebFetch / WebSearch</td><td class="r-low">高</td><td class="r-low">只读</td><td class="r-low">低风险</td><td class="r-low">自动允许</td></tr>
+        <tr><td>Write / Edit（新文件）</td><td class="r-med">中</td><td class="r-med">本地文件</td><td class="r-med">中风险</td><td class="r-med">会话授权</td></tr>
+        <tr><td>Bash（读取命令）</td><td class="r-med">高</td><td class="r-med">只读</td><td class="r-med">低-中</td><td class="r-med">规则匹配</td></tr>
+        <tr><td>Bash（写入/安装）</td><td class="r-med">中</td><td class="r-med">本地系统</td><td class="r-med">中风险</td><td class="r-med">规则匹配</td></tr>
+        <tr><td>git push --force</td><td class="r-high">低</td><td class="r-high">远程仓库</td><td class="r-high">高风险</td><td class="r-high">强制确认</td></tr>
+        <tr><td>外部消息发送</td><td class="r-high">低</td><td class="r-high">外部系统</td><td class="r-high">高风险</td><td class="r-high">强制确认</td></tr>
+        <tr><td>DROP TABLE / rm -rf</td><td class="r-crit">不可逆</td><td class="r-crit">数据库/文件</td><td class="r-crit">极端风险</td><td class="r-crit">拒绝/确认</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>

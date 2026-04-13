@@ -1,0 +1,15 @@
+# Claude Code 本地配置（含权限规则，不应共享）
+.claude/
+
+# 参考资料存档（体积大，网页截图等，不纳入版本控制）
+materials/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 编辑器临时文件
+*.swp
+*.swo
+*~

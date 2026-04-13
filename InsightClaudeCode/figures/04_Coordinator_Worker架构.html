@@ -1,0 +1,321 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code · Coordinator/Worker 架构 · 两种运行模式</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#020409;--text:#e2e8f0;--muted:#4b5563;--cc:#3b82f6;--green:#10b981;--amber:#f59e0b;--red:#ef4444;--purple:#8b5cf6;--cyan:#06b6d4;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 70% 50% at 50% 30%,rgba(139,92,246,.04) 0%,transparent 60%),linear-gradient(rgba(59,130,246,.012) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,.012) 1px,transparent 1px);background-size:auto,40px 40px,40px 40px;z-index:0;pointer-events:none;}
+.page{position:relative;z-index:1;padding:32px 24px 80px;max-width:1500px;margin:0 auto;}
+.badge{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(139,92,246,.3);background:rgba(139,92,246,.08);padding:4px 14px;border-radius:100px;font-size:13px;color:#c084fc;letter-spacing:.15em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:14px;}
+.dot{width:6px;height:6px;border-radius:50%;background:#8b5cf6;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(139,92,246,.5)}50%{box-shadow:0 0 0 8px rgba(139,92,246,0)}}
+h1{font-size:clamp(24px,4vw,48px);font-weight:700;line-height:1.1;margin-bottom:6px;}
+h1 .hl{color:#c084fc;}
+.subtitle{color:var(--muted);font-size:13px;font-family:'JetBrains Mono',monospace;margin-bottom:36px;}
+
+/* MAIN LAYOUT */
+.arch-diagram{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px;}
+@media(max-width:1000px){.arch-diagram{grid-template-columns:1fr;}}
+
+/* ARCHITECTURE BOXES */
+.arch-box{background:rgba(0,0,0,.4);border:1px solid var(--ab-border);border-radius:14px;padding:20px;position:relative;}
+.ab-single{--ab-border:rgba(59,130,246,.3);}
+.ab-coord{--ab-border:rgba(139,92,246,.3);}
+
+.arch-title{font-size:13px;font-weight:700;color:#fff;margin-bottom:4px;}
+.arch-subtitle{font-size:13px;font-family:'JetBrains Mono',monospace;color:var(--muted);margin-bottom:16px;}
+
+/* NODE */
+.node{border-radius:8px;padding:10px 14px;border:1px solid var(--n-border);background:var(--n-bg);margin-bottom:8px;position:relative;}
+.n-cc   {--n-border:rgba(59,130,246,.35);--n-bg:rgba(59,130,246,.08);}
+.n-coord{--n-border:rgba(139,92,246,.35);--n-bg:rgba(139,92,246,.08);}
+.n-worker{--n-border:rgba(6,182,212,.3);--n-bg:rgba(6,182,212,.05);}
+.n-worktree{--n-border:rgba(16,185,129,.25);--n-bg:rgba(16,185,129,.04);}
+
+.n-label{font-size:13px;font-family:'JetBrains Mono',monospace;color:var(--n-color);margin-bottom:3px;letter-spacing:.1em;text-transform:uppercase;}
+.n-cc .n-label{--n-color:#60a5fa;}
+.n-coord .n-label{--n-color:#c084fc;}
+.n-worker .n-label{--n-color:#67e8f9;}
+.n-worktree .n-label{--n-color:#34d399;}
+
+.n-name{font-size:13px;font-weight:700;color:#fff;margin-bottom:4px;}
+.n-desc{font-size:13px;color:#94a3b8;line-height:1.5;}
+.n-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;}
+.n-tag{font-size:12px;font-family:'JetBrains Mono',monospace;padding:2px 6px;border-radius:3px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);color:#4b5563;}
+
+/* WORKERS ROW */
+.workers-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px;}
+.worker-card{border-radius:8px;padding:10px;border:1px solid rgba(6,182,212,.25);background:rgba(6,182,212,.04);position:relative;}
+.wc-type{font-size:12px;font-family:'JetBrains Mono',monospace;color:#67e8f9;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;}
+.wc-name{font-size:13px;font-weight:700;color:#e2e8f0;margin-bottom:4px;}
+.wc-tools{display:flex;flex-direction:column;gap:2px;}
+.wt{font-size:12px;font-family:'JetBrains Mono',monospace;color:#4b5563;}
+.wt.allowed{color:#34d399;}
+.wt.denied{color:#ef4444;text-decoration:line-through;}
+
+/* FLOW ARROWS */
+.flow-down{display:flex;flex-direction:column;align-items:center;padding:6px 0;gap:2px;}
+.fd-line{width:2px;height:14px;background:linear-gradient(var(--fd-color),rgba(255,255,255,.05));border-radius:1px;}
+.fd-arr{font-size:13px;line-height:1;color:var(--fd-color);}
+.fd-label{font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--fd-color);text-align:center;}
+
+/* TASK NOTIFICATION XML */
+.xml-box{background:#080d17;border:1px solid rgba(139,92,246,.25);border-radius:8px;padding:12px;margin-top:12px;overflow-x:auto;}
+pre{font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.8;color:#4b5563;white-space:pre;}
+.xt{color:#c084fc;}.xv{color:#86efac;}.xa{color:#67e8f9;}.xc{color:#374151;}
+
+/* AGENT TYPES TABLE */
+.agent-types{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:24px;}
+@media(max-width:900px){.agent-types{grid-template-columns:1fr;}}
+.at-card{border-radius:10px;padding:16px;border:1px solid var(--at-border);background:var(--at-bg);}
+.at-oneshot{--at-border:rgba(59,130,246,.25);--at-bg:rgba(59,130,246,.05);}
+.at-teammate{--at-border:rgba(16,185,129,.25);--at-bg:rgba(16,185,129,.04);}
+.at-auto{--at-border:rgba(245,158,11,.25);--at-bg:rgba(245,158,11,.04);}
+.at-label{font-size:13px;font-family:'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px;}
+.at-oneshot .at-label{color:#60a5fa;}
+.at-teammate .at-label{color:#34d399;}
+.at-auto .at-label{color:#fbbf24;}
+.at-name{font-size:14px;font-weight:700;color:#fff;margin-bottom:8px;}
+.at-features{display:flex;flex-direction:column;gap:4px;}
+.at-feat{font-size:13px;color:#94a3b8;display:flex;align-items:flex-start;gap:6px;}
+.at-feat::before{content:'·';color:var(--at-dot);flex-shrink:0;}
+.at-oneshot .at-feat::before{--at-dot:#60a5fa;}
+.at-teammate .at-feat::before{--at-dot:#34d399;}
+.at-auto .at-feat::before{--at-dot:#fbbf24;}
+
+/* WORKTREE LIFECYCLE */
+.wl-steps{display:flex;align-items:center;gap:0;flex-wrap:wrap;}
+.wl-step{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.wl-box{padding:6px 12px;border-radius:6px;font-size:13px;font-family:'JetBrains Mono',monospace;font-weight:700;border:1px solid var(--ws-border);background:var(--ws-bg);color:var(--ws-color);}
+.ws1{--ws-border:rgba(59,130,246,.3);--ws-bg:rgba(59,130,246,.08);--ws-color:#60a5fa;}
+.ws2{--ws-border:rgba(6,182,212,.3);--ws-bg:rgba(6,182,212,.08);--ws-color:#67e8f9;}
+.ws3{--ws-border:rgba(16,185,129,.3);--ws-bg:rgba(16,185,129,.08);--ws-color:#34d399;}
+.ws4{--ws-border:rgba(245,158,11,.3);--ws-bg:rgba(245,158,11,.08);--ws-color:#fbbf24;}
+.ws5{--ws-border:rgba(139,92,246,.3);--ws-bg:rgba(139,92,246,.08);--ws-color:#c084fc;}
+.wl-arrow{font-size:14px;color:#374151;margin:0 4px;}
+.wl-desc{font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--muted);max-width:80px;text-align:center;}
+
+/* PANEL */
+.panel{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:18px;margin-bottom:20px;}
+.panel-title{font-size:13px;color:#60a5fa;letter-spacing:.12em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:14px;}
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="badge"><span class="dot"></span>InsightClaudeCode · Figures · Vol.04</div>
+<h1>Coordinator / Worker 架构<br><span class="hl">两种运行模式 · 任务分发协议 · 并行执行网络</span></h1>
+<p class="subtitle">基于 src/coordinator/coordinatorMode.ts · s04/s15/s16/s17 章节</p>
+
+<!-- ARCHITECTURE COMPARISON -->
+<div class="arch-diagram">
+
+  <!-- SINGLE MODE -->
+  <div class="arch-box ab-single">
+    <div class="arch-title">模式 A：单 Agent 普通对话模式</div>
+    <div class="arch-subtitle">CLAUDE_CODE_COORDINATOR_MODE 未设置</div>
+    <div class="node n-cc">
+      <div class="n-label">单实例</div>
+      <div class="n-name">QueryEngine（单个实例）</div>
+      <div class="n-desc">用户 → Claude → 工具执行 → 响应<br>权限通过交互式对话框确认</div>
+      <div class="n-tags">
+        <span class="n-tag">submitMessage()</span>
+        <span class="n-tag">interactive permission</span>
+        <span class="n-tag">mutableMessages[]</span>
+      </div>
+    </div>
+    <div style="text-align:center;color:#374151;font-size:24px;padding:8px 0;">↕</div>
+    <div class="node n-cc">
+      <div class="n-label">子代理（一次性）</div>
+      <div class="n-name">Sub-Agent（Agent 工具派生）</div>
+      <div class="n-desc">一次性任务委派。完成返回摘要，然后销毁。无独立身份，无跨会话记忆。</div>
+      <div class="n-tags">
+        <span class="n-tag">独立上下文</span>
+        <span class="n-tag">Explore/Plan/Execute 角色</span>
+        <span class="n-tag">摘要返回</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- COORDINATOR MODE -->
+  <div class="arch-box ab-coord">
+    <div class="arch-title">模式 B：Coordinator / Worker 双模架构</div>
+    <div class="arch-subtitle">CLAUDE_CODE_COORDINATOR_MODE=1 激活 · Feature Gate</div>
+    <div class="node n-coord">
+      <div class="n-label">Coordinator（协调者）</div>
+      <div class="n-name">Coordinator Agent</div>
+      <div class="n-desc">600行+专用系统提示。制定计划，分解任务，通过 task-notification XML 向 Workers 派发任务，汇聚结果。</div>
+      <div class="n-tags">
+        <span class="n-tag">getCoordinatorSystemPrompt()</span>
+        <span class="n-tag">getCoordinatorUserContext()</span>
+        <span class="n-tag">isCoordinatorMode()</span>
+        <span class="n-tag">scratchpadDir 注入</span>
+      </div>
+    </div>
+    <div style="text-align:center;padding:6px 0;">
+      <div style="font-size:12px;font-family:'JetBrains Mono',monospace;color:#8b5cf6;">&lt;task-notification&gt; XML</div>
+      <div style="font-size:20px;color:#374151;">↓↓↓</div>
+    </div>
+    <div class="workers-row">
+      <div class="worker-card">
+        <div class="wc-type">Worker A · Explore</div>
+        <div class="wc-name">探索代理</div>
+        <div class="wc-tools">
+          <span class="wt allowed">✓ Read</span>
+          <span class="wt allowed">✓ Glob/Grep</span>
+          <span class="wt allowed">✓ WebFetch</span>
+          <span class="wt denied">✗ Write/Bash</span>
+        </div>
+      </div>
+      <div class="worker-card">
+        <div class="wc-type">Worker B · Plan</div>
+        <div class="wc-name">规划代理</div>
+        <div class="wc-tools">
+          <span class="wt allowed">✓ Read/Glob</span>
+          <span class="wt allowed">✓ TodoWrite</span>
+          <span class="wt allowed">✓ TaskCreate</span>
+          <span class="wt denied">✗ Write/Bash</span>
+        </div>
+      </div>
+      <div class="worker-card">
+        <div class="wc-type">Worker C · Execute</div>
+        <div class="wc-name">执行代理</div>
+        <div class="wc-tools">
+          <span class="wt allowed">✓ 全部工具</span>
+          <span class="wt allowed">✓ Bash/Write</span>
+          <span class="wt allowed">✓ Agent</span>
+          <span class="wt allowed">✓ SyntheticOutput</span>
+        </div>
+      </div>
+    </div>
+    <div style="text-align:center;padding:6px 0;font-size:20px;color:#374151;">↑</div>
+    <div class="node n-coord">
+      <div class="n-label">结果汇聚</div>
+      <div class="n-name">SyntheticOutput → Coordinator</div>
+      <div class="n-desc">Workers 通过 SyntheticOutput 工具将结果传回 Coordinator。Coordinator 汇聚所有摘要，生成最终响应。</div>
+    </div>
+  </div>
+</div>
+
+<!-- TASK-NOTIFICATION XML -->
+<div class="panel">
+  <div class="panel-title">task-notification XML 协议（Coordinator → Worker 通信）</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div>
+      <div style="font-size:13px;color:#94a3b8;margin-bottom:8px;">Coordinator 向 Worker 发送的任务通知（通过 user-role 消息携带）</div>
+      <div class="xml-box">
+        <pre>&lt;<span class="xt">task-notification</span>&gt;
+  &lt;<span class="xt">task-id</span>&gt;<span class="xv">task_001</span>&lt;/<span class="xt">task-id</span>&gt;
+  &lt;<span class="xt">instructions</span>&gt;
+    <span class="xv">分析 src/auth/ 目录下所有文件</span>
+    <span class="xv">生成安全审查报告</span>
+  &lt;/<span class="xt">instructions</span>&gt;
+  &lt;<span class="xt">allowed-tools</span>&gt;
+    <span class="xa">Read, Grep, Glob, WebFetch</span>
+  &lt;/<span class="xt">allowed-tools</span>&gt;
+  &lt;<span class="xt">output-format</span>&gt;<span class="xv">markdown</span>&lt;/<span class="xt">output-format</span>&gt;
+  &lt;<span class="xt">scratchpad-path</span>&gt;<span class="xv">.claude/scratch/</span>&lt;/<span class="xt">scratchpad-path</span>&gt;
+&lt;/<span class="xt">task-notification</span>&gt;</pre>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:13px;color:#94a3b8;margin-bottom:8px;">INTERNAL_WORKER_TOOLS（Worker 专用工具集）</div>
+      <div class="xml-box">
+        <pre><span class="xc">// Worker 可以使用的内部专用工具</span>
+<span class="xt">TeamCreate</span>      → 创建团队成员
+<span class="xt">TeamDelete</span>      → 删除团队成员
+<span class="xt">SendMessage</span>     → 向队友发消息
+<span class="xt">SyntheticOutput</span> → 向Coordinator返回结果
+
+<span class="xc">// scratchpadDir (tengu_scratch gate)</span>
+scratchpadDir = <span class="xa">".claude/scratch/"</span>
+<span class="xc">// 多 Worker 可读写同一目录</span>
+<span class="xc">// 共享知识，避免重复工作</span></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- THREE AGENT TYPES -->
+<div style="font-size:13px;color:#60a5fa;letter-spacing:.12em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:14px;">三种 Agent 类型对比</div>
+<div class="agent-types">
+  <div class="at-card at-oneshot">
+    <div class="at-label">s04 · One-Shot</div>
+    <div class="at-name">Sub-Agent</div>
+    <div class="at-features">
+      <div class="at-feat">一次性派发，完成返回摘要</div>
+      <div class="at-feat">无独立身份，无跨会话记忆</div>
+      <div class="at-feat">Agent 工具（原名 Task）派生</div>
+      <div class="at-feat">独立上下文窗口</div>
+      <div class="at-feat">可选 git worktree 隔离</div>
+      <div class="at-feat">角色: Explore / Plan / Execute</div>
+    </div>
+  </div>
+  <div class="at-card at-teammate">
+    <div class="at-label">s15 · Persistent</div>
+    <div class="at-name">Teammate（持久队友）</div>
+    <div class="at-features">
+      <div class="at-feat">长期存活，有独立身份和角色</div>
+      <div class="at-feat">JSONL 收件箱（append-only）</div>
+      <div class="at-feat">每次LLM调用前检查收件箱</div>
+      <div class="at-feat">状态: spawn→WORKING→IDLE→...</div>
+      <div class="at-feat">存储: .team/config.json</div>
+      <div class="at-feat">通信: MessageBus.send() / read_inbox()</div>
+    </div>
+  </div>
+  <div class="at-card at-auto">
+    <div class="at-label">s17 · Autonomous</div>
+    <div class="at-name">Autonomous Agent（自主代理）</div>
+    <div class="at-features">
+      <div class="at-feat">自主认领任务，无需人工派发</div>
+      <div class="at-feat">基于任务板协调机制</div>
+      <div class="at-feat">WorktreeRecord 独立执行通道</div>
+      <div class="at-feat">TaskRecord 驱动（durable goal）</div>
+      <div class="at-feat">RuntimeTaskState 实时执行槽</div>
+      <div class="at-feat">ScheduleCronTool 支持定时触发</div>
+    </div>
+  </div>
+</div>
+
+<!-- WORKTREE LIFECYCLE -->
+<div class="panel">
+  <div class="panel-title">Worktree 生命周期（git worktree 隔离执行）</div>
+  <div class="wl-steps">
+    <div class="wl-step">
+      <div class="wl-box ws1">创建</div>
+      <div class="wl-desc">git worktree add .claude/worktrees/{name}</div>
+    </div>
+    <div class="wl-arrow">→</div>
+    <div class="wl-step">
+      <div class="wl-box ws2">派发</div>
+      <div class="wl-desc">Worker在独立目录执行</div>
+    </div>
+    <div class="wl-arrow">→</div>
+    <div class="wl-step">
+      <div class="wl-box ws3">执行</div>
+      <div class="wl-desc">文件改动不影响主目录</div>
+    </div>
+    <div class="wl-arrow">→</div>
+    <div class="wl-step">
+      <div class="wl-box ws4">汇聚</div>
+      <div class="wl-desc">SyntheticOutput摘要返回Coordinator</div>
+    </div>
+    <div class="wl-arrow">→</div>
+    <div class="wl-step">
+      <div class="wl-box ws5">清理</div>
+      <div class="wl-desc">git worktree remove或保留分支</div>
+    </div>
+  </div>
+  <div style="margin-top:14px;font-size:13px;color:#4b5563;font-family:'JetBrains Mono',monospace;">
+    TaskRecord (durable goal) ≠ RuntimeTaskState (live executor) · 两者分离是系统稳健性的关键设计
+  </div>
+</div>
+
+</div>
+</body>
+</html>

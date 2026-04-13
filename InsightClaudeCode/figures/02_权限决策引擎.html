@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code · 权限决策引擎 · 7种模式 · 完整决策流水线</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#020409;--text:#e2e8f0;--muted:#4b5563;--cc:#3b82f6;--red:#ef4444;--amber:#f59e0b;--green:#10b981;--purple:#8b5cf6;--cyan:#06b6d4;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 60% 40% at 50% 0%,rgba(239,68,68,.04) 0%,transparent 60%),linear-gradient(rgba(59,130,246,.012) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,.012) 1px,transparent 1px);background-size:auto,40px 40px,40px 40px;z-index:0;pointer-events:none;}
+.page{position:relative;z-index:1;padding:32px 24px 80px;max-width:1600px;margin:0 auto;}
+.badge{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);padding:4px 14px;border-radius:100px;font-size:13px;color:#fca5a5;letter-spacing:.15em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:14px;}
+.dot{width:6px;height:6px;border-radius:50%;background:#ef4444;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.5)}50%{box-shadow:0 0 0 8px rgba(239,68,68,0)}}
+h1{font-size:clamp(24px,4vw,48px);font-weight:700;line-height:1.1;margin-bottom:6px;}
+h1 .hl{color:#fca5a5;}
+.subtitle{color:var(--muted);font-size:13px;font-family:'JetBrains Mono',monospace;margin-bottom:36px;}
+.sec-label{font-size:13px;color:#60a5fa;letter-spacing:.12em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:14px;}
+
+/* ── 7 MODES ─────────────────────────────────────────────── */
+.modes-ext{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px;}
+.modes-int{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px;}
+@media(max-width:1200px){.modes-ext{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:700px){.modes-ext{grid-template-columns:1fr;}.modes-int{grid-template-columns:1fr;}}
+
+.mc{border-radius:10px;padding:14px;border:1px solid var(--mc-border);background:var(--mc-bg);position:relative;overflow:hidden;}
+.mc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--mc-color);box-shadow:0 0 8px var(--mc-color);}
+.mc-default   {--mc-color:#60a5fa;--mc-border:rgba(59,130,246,.3);--mc-bg:rgba(59,130,246,.05);}
+.mc-accept    {--mc-color:#34d399;--mc-border:rgba(16,185,129,.3);--mc-bg:rgba(16,185,129,.05);}
+.mc-plan      {--mc-color:#818cf8;--mc-border:rgba(99,102,241,.3);--mc-bg:rgba(99,102,241,.05);}
+.mc-bypass    {--mc-color:#ef4444;--mc-border:rgba(239,68,68,.3);--mc-bg:rgba(239,68,68,.05);}
+.mc-dontask   {--mc-color:#f97316;--mc-border:rgba(249,115,22,.3);--mc-bg:rgba(249,115,22,.05);}
+.mc-auto      {--mc-color:#f59e0b;--mc-border:rgba(245,158,11,.3);--mc-bg:rgba(245,158,11,.05);}
+.mc-bubble    {--mc-color:#6b7280;--mc-border:rgba(107,114,128,.25);--mc-bg:rgba(107,114,128,.04);}
+
+.mc-type{font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--mc-color);margin-bottom:4px;}
+.mc-name{font-size:15px;font-weight:700;color:#fff;margin-bottom:2px;}
+.mc-title{font-size:13px;font-family:'JetBrains Mono',monospace;color:var(--muted);margin-bottom:7px;}
+.mc-badge{display:inline-block;font-size:11px;font-family:'JetBrains Mono',monospace;padding:1px 7px;border-radius:3px;background:rgba(0,0,0,.3);border:1px solid var(--mc-border);color:var(--mc-color);margin-bottom:7px;}
+.mc-desc{font-size:13px;color:#94a3b8;line-height:1.5;}
+
+/* ── TYPESCRIPT BLOCK ────────────────────────────────────── */
+.ts-block{background:#07101f;border:1px solid rgba(59,130,246,.2);border-radius:8px;padding:14px;margin-bottom:28px;overflow-x:auto;}
+pre{font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.75;color:#4b5563;white-space:pre;}
+.k{color:#c084fc;}.v{color:#86efac;}.c{color:#374151;}.g{color:#34d399;}.r{color:#f87171;}.y{color:#fbbf24;}.b{color:#60a5fa;}
+
+/* ── PIPELINE SECTION ────────────────────────────────────── */
+.pipeline-wrap{background:rgba(0,0,0,.4);border:1px solid rgba(239,68,68,.15);border-radius:14px;padding:24px;margin-bottom:24px;}
+.pipeline-grid{display:grid;grid-template-columns:1fr 380px;gap:24px;align-items:start;}
+@media(max-width:1100px){.pipeline-grid{grid-template-columns:1fr;}}
+
+.step-list{display:flex;flex-direction:column;gap:5px;}
+.step{border-radius:7px;padding:9px 14px;border:1px solid var(--s-border);background:var(--s-bg);position:relative;}
+.step::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:2px 0 0 2px;background:var(--s-color);}
+.s-neutral   {--s-color:#4b5563;--s-border:rgba(75,85,99,.2);--s-bg:rgba(75,85,99,.04);}
+.s-deny      {--s-color:#ef4444;--s-border:rgba(239,68,68,.2);--s-bg:rgba(239,68,68,.04);}
+.s-ask       {--s-color:#f59e0b;--s-border:rgba(245,158,11,.2);--s-bg:rgba(245,158,11,.04);}
+.s-immune    {--s-color:#ef4444;--s-border:rgba(239,68,68,.28);--s-bg:rgba(239,68,68,.06);}
+.s-allow     {--s-color:#10b981;--s-border:rgba(16,185,129,.22);--s-bg:rgba(16,185,129,.04);}
+
+.step-hdr{display:flex;align-items:center;gap:8px;margin-bottom:3px;}
+.snum{font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--s-color);min-width:28px;}
+.sname{font-size:13px;font-weight:600;color:#e2e8f0;}
+.ibadge{font-size:11px;font-family:'JetBrains Mono',monospace;padding:0px 5px;border-radius:3px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;}
+.sdesc{font-size:13px;color:#64748b;line-height:1.5;padding-left:36px;}
+.sout{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px;padding-left:36px;}
+.ot{font-size:11px;font-family:'JetBrains Mono',monospace;padding:1px 6px;border-radius:3px;border:1px solid var(--ot-b);background:var(--ot-bg);color:var(--ot-c);}
+.o-allow{--ot-c:#34d399;--ot-b:rgba(16,185,129,.3);--ot-bg:rgba(16,185,129,.08);}
+.o-deny {--ot-c:#f87171;--ot-b:rgba(239,68,68,.3);--ot-bg:rgba(239,68,68,.08);}
+.o-ask  {--ot-c:#fbbf24;--ot-b:rgba(245,158,11,.3);--ot-bg:rgba(245,158,11,.08);}
+.o-pass {--ot-c:#60a5fa;--ot-b:rgba(59,130,246,.3);--ot-bg:rgba(59,130,246,.08);}
+
+.step-gap{height:3px;}
+
+/* ── PIPELINE RIGHT NOTES ────────────────────────────────── */
+.pnotes{display:flex;flex-direction:column;gap:10px;}
+.pn{border-radius:8px;padding:12px;border:1px solid var(--pn-b);background:var(--pn-bg);}
+.pn-bypass{--pn-b:rgba(239,68,68,.2);--pn-bg:rgba(239,68,68,.04);}
+.pn-dontask{--pn-b:rgba(249,115,22,.2);--pn-bg:rgba(249,115,22,.04);}
+.pn-auto{--pn-b:rgba(245,158,11,.2);--pn-bg:rgba(245,158,11,.04);}
+.pn-hl{--pn-b:rgba(239,68,68,.18);--pn-bg:rgba(239,68,68,.03);}
+.pn-head{font-size:12px;font-family:'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;}
+.pn-bypass .pn-head{color:#fca5a5;}
+.pn-dontask .pn-head{color:#fb923c;}
+.pn-auto .pn-head{color:#fbbf24;}
+.pn-hl .pn-head{color:#fca5a5;}
+.pn-body{font-size:13px;font-family:'JetBrains Mono',monospace;color:#4b5563;line-height:1.75;}
+.pn-body .k{color:#c084fc;}.pn-body .v{color:#86efac;}.pn-body .r{color:#f87171;}.pn-body .g{color:#34d399;}.pn-body .y{color:#fbbf24;}
+
+/* ── TWO-COL / PANELS ────────────────────────────────────── */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;}
+@media(max-width:900px){.two-col{grid-template-columns:1fr;}}
+.panel{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:18px;}
+.panel-title{font-size:13px;color:#60a5fa;letter-spacing:.12em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:14px;}
+
+/* ── HANDLER CHAIN ───────────────────────────────────────── */
+.hchain{display:flex;flex-direction:column;gap:5px;}
+.hc{padding:10px 12px;border-radius:7px;border:1px solid var(--hc-b);background:var(--hc-bg);}
+.hc1{--hc-b:rgba(139,92,246,.25);--hc-bg:rgba(139,92,246,.04);}
+.hc2{--hc-b:rgba(6,182,212,.25);--hc-bg:rgba(6,182,212,.04);}
+.hc3{--hc-b:rgba(245,158,11,.25);--hc-bg:rgba(245,158,11,.04);}
+.hc4{--hc-b:rgba(16,185,129,.25);--hc-bg:rgba(16,185,129,.04);}
+.hc-tag{font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--hc-c);letter-spacing:.05em;margin-bottom:3px;}
+.hc1 .hc-tag{--hc-c:#c084fc;}.hc2 .hc-tag{--hc-c:#67e8f9;}.hc3 .hc-tag{--hc-c:#fbbf24;}.hc4 .hc-tag{--hc-c:#34d399;}
+.hc-name{font-size:13px;font-weight:700;color:#e2e8f0;margin-bottom:4px;}
+.hc-desc{font-size:13px;color:#64748b;line-height:1.5;}
+.hc-arr{text-align:center;color:#374151;font-size:12px;padding:1px 0;}
+
+/* ── AUTO CLASSIFIER ─────────────────────────────────────── */
+.ctiers{display:flex;flex-direction:column;gap:8px;}
+.ct{padding:10px 12px;border-radius:7px;border:1px solid var(--ct-b);background:var(--ct-bg);position:relative;}
+.ct1{--ct-b:rgba(16,185,129,.25);--ct-bg:rgba(16,185,129,.04);}
+.ct2{--ct-b:rgba(6,182,212,.25);--ct-bg:rgba(6,182,212,.04);}
+.ct3{--ct-b:rgba(245,158,11,.25);--ct-bg:rgba(245,158,11,.04);}
+.ct-num{position:absolute;right:8px;top:8px;width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-family:'JetBrains Mono',monospace;background:rgba(0,0,0,.3);border:1px solid var(--ct-b);color:var(--ct-c);}
+.ct1 .ct-num{--ct-c:#34d399;}.ct2 .ct-num{--ct-c:#67e8f9;}.ct3 .ct-num{--ct-c:#fbbf24;}
+.ct-tag{font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--ct-c);margin-bottom:3px;}
+.ct1 .ct-tag{--ct-c:#34d399;}.ct2 .ct-tag{--ct-c:#67e8f9;}.ct3 .ct-tag{--ct-c:#fbbf24;}
+.ct-name{font-size:13px;font-weight:700;color:#e2e8f0;margin-bottom:4px;}
+.ct-desc{font-size:13px;color:#64748b;line-height:1.5;font-family:'JetBrains Mono',monospace;}
+
+/* ── BOTTOM GRID ─────────────────────────────────────────── */
+.bot3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+@media(max-width:1100px){.bot3{grid-template-columns:1fr 1fr;}}
+@media(max-width:600px){.bot3{grid-template-columns:1fr;}}
+
+.immune-list,.danger-list,.perm-levels{display:flex;flex-direction:column;gap:5px;}
+.bi{padding:8px 10px;border-radius:6px;background:rgba(239,68,68,.04);border:1px solid rgba(239,68,68,.15);}
+.bi-step{font-size:12px;font-family:'JetBrains Mono',monospace;color:#f87171;margin-bottom:2px;}
+.bi-desc{font-size:13px;color:#64748b;}
+.di{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;background:rgba(239,68,68,.04);border:1px solid rgba(239,68,68,.1);}
+.di-cmd{font-size:13px;font-family:'JetBrains Mono',monospace;color:#fca5a5;flex:1;}
+.dbadge{font-size:11px;padding:1px 5px;border-radius:3px;}
+.db-deny{background:rgba(239,68,68,.2);color:#fca5a5;border:1px solid rgba(239,68,68,.3);}
+.db-warn{background:rgba(245,158,11,.2);color:#fbbf24;border:1px solid rgba(245,158,11,.3);}
+.db-imm{background:rgba(139,92,246,.2);color:#c084fc;border:1px solid rgba(139,92,246,.3);}
+.pl-item{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);}
+.pl-item:last-child{border-bottom:none;}
+.pl-num{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-family:'JetBrains Mono',monospace;flex-shrink:0;}
+.l1{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:#fca5a5;}
+.l2{background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.4);color:#fbbf24;}
+.l3{background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.4);color:#60a5fa;}
+.l4{background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);color:#c084fc;}
+.l5{background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:#34d399;}
+.pl-name{font-size:13px;font-weight:700;color:#e2e8f0;margin-bottom:2px;}
+.pl-path{font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--muted);}
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="badge"><span class="dot"></span>InsightClaudeCode · Figures · Vol.02</div>
+<h1>权限决策引擎<br><span class="hl">7种权限模式 · 完整决策流水线 · Handler Chain</span></h1>
+<p class="subtitle">基于 src/types/permissions.ts · src/utils/permissions/permissions.ts · src/hooks/useCanUseTool.tsx</p>
+
+<!-- ── EXTERNAL MODES ──────────────────────────────────── -->
+<div class="sec-label">External Modes（5种 · 用户可配置 · 可写入 settings.json）</div>
+<div class="modes-ext">
+
+  <div class="mc mc-default">
+    <div class="mc-type">External · 1</div>
+    <div class="mc-name">default</div>
+    <div class="mc-title">Default</div>
+    <div class="mc-badge">color: text（中性）</div>
+    <div class="mc-desc">Deny规则优先 → Allow规则匹配 → 其余请求用户确认。标准工作模式，大多数用户的默认状态。</div>
+  </div>
+
+  <div class="mc mc-accept">
+    <div class="mc-type">External · 2</div>
+    <div class="mc-name">acceptEdits</div>
+    <div class="mc-title">Accept edits</div>
+    <div class="mc-badge">color: autoAccept（绿）· ⏵⏵</div>
+    <div class="mc-desc">工作目录内文件 Write / Edit 自动放行，无需提示。safetyCheck 路径（.git/.claude 等）仍需确认。</div>
+  </div>
+
+  <div class="mc mc-plan">
+    <div class="mc-type">External · 3</div>
+    <div class="mc-name">plan</div>
+    <div class="mc-title">Plan Mode</div>
+    <div class="mc-badge">color: planMode（蓝灰）· ⏸</div>
+    <div class="mc-desc">阻止所有写操作，只读自动通过。规划、探索阶段的安全模式。未接入 UI 循环时为 dontAsk 注释。</div>
+  </div>
+
+  <div class="mc mc-bypass">
+    <div class="mc-type">External · 4</div>
+    <div class="mc-name">bypassPermissions</div>
+    <div class="mc-title">Bypass Permissions</div>
+    <div class="mc-badge">color: error（红）· ⏵⏵</div>
+    <div class="mc-desc">跳过几乎所有权限检查，最宽松模式。<strong style="color:#fca5a5;">但 bypass-immune 检查仍不可绕过</strong>（steps 1e/1f/1g）。</div>
+  </div>
+
+  <div class="mc mc-dontask">
+    <div class="mc-type">External · 5</div>
+    <div class="mc-name">dontAsk</div>
+    <div class="mc-title">Don't Ask</div>
+    <div class="mc-badge">color: error（红）· ⏵⏵ · 未接入 UI 循环</div>
+    <div class="mc-desc">所有 ask → deny（静默拒绝），绝不弹出确认框。适用于无人值守 CI / CD 全自动场景。</div>
+  </div>
+
+</div>
+
+<!-- ── INTERNAL MODES ─────────────────────────────────── -->
+<div class="sec-label">Internal Modes（2种 · Feature Gate / 代码限定）</div>
+<div class="modes-int">
+
+  <div class="mc mc-auto">
+    <div class="mc-type">Internal · 6 · 需要 TRANSCRIPT_CLASSIFIER Feature Gate · 对 ant（内部）用户可访问</div>
+    <div class="mc-name">auto</div>
+    <div class="mc-title">Auto mode</div>
+    <div class="mc-badge">color: warning（黄）· ⏵⏵ · external 映射 → 'default'</div>
+    <div class="mc-desc">AI 分类器（YoloClassifier）自主决策，替代人工确认。三级优化：acceptEdits 快速路径 → 安全工具白名单 → YoloClassifier 2阶段 API（fast + thinking）。断路器防止连续拒绝失控。</div>
+  </div>
+
+  <div class="mc mc-bubble">
+    <div class="mc-type">Internal · 7 · 父上下文专用 · 外部映射 → 'default'</div>
+    <div class="mc-name">bubble</div>
+    <div class="mc-title">（无 UI 标题 / 无 UI 循环入口）</div>
+    <div class="mc-badge">color: — · external 映射 → 'default'</div>
+    <div class="mc-desc">向父上下文冒泡权限请求，由父 Agent 决策。子 Agent 在嵌套架构中使用，外部展示统一映射为 'default'。</div>
+  </div>
+
+</div>
+
+<!-- ── TYPESCRIPT DEFINITION ──────────────────────────── -->
+<div class="ts-block">
+<pre><span class="c">// src/types/permissions.ts — 权限模式权威类型定义</span>
+<span class="k">export const</span> EXTERNAL_PERMISSION_MODES = [
+  <span class="v">'acceptEdits'</span>, <span class="v">'bypassPermissions'</span>, <span class="v">'default'</span>, <span class="v">'dontAsk'</span>, <span class="v">'plan'</span>,
+] <span class="k">as const</span>
+<span class="k">export type</span> ExternalPermissionMode = <span class="k">typeof</span> EXTERNAL_PERMISSION_MODES[<span class="k">number</span>]       <span class="c">// 5种外部模式</span>
+<span class="k">export type</span> InternalPermissionMode = ExternalPermissionMode | <span class="v">'auto'</span> | <span class="v">'bubble'</span>    <span class="c">// +2种内部 = 7种</span>
+<span class="k">export type</span> PermissionMode = InternalPermissionMode
+
+<span class="c">// UI 循环（Shift+Tab）—— src/utils/permissions/getNextPermissionMode.ts</span>
+<span class="c">// 普通用户: default → acceptEdits → plan → (bypassPermissions?) → (auto?) → default</span>
+<span class="c">// Ant用户:  default → (bypassPermissions?) → (auto?) → default   ← 跳过 acceptEdits / plan</span>
+<span class="c">// dontAsk: 注释 "Not exposed in UI cycle yet"，不出现在循环中</span></pre>
+</div>
+
+<!-- ── PIPELINE ────────────────────────────────────────── -->
+<div class="pipeline-wrap">
+  <div class="sec-label" style="margin-bottom:18px;">hasPermissionsToUseToolInner — 完整决策流水线（第一个明确结果获胜）</div>
+  <div class="pipeline-grid">
+
+    <!-- LEFT: step cards -->
+    <div class="step-list">
+
+      <div class="step s-neutral">
+        <div class="step-hdr"><span class="snum">1a</span><span class="sname">Deny rule for entire tool?</span></div>
+        <div class="sdesc">deny rules 命中 → 立即 DENY，优先级最高，无法被任何模式绕过</div>
+        <div class="sout"><span class="ot o-deny">→ DENY</span><span class="ot o-pass">无匹配 → 继续</span></div>
+      </div>
+
+      <div class="step s-ask">
+        <div class="step-hdr"><span class="snum">1b</span><span class="sname">Ask rule for entire tool?</span></div>
+        <div class="sdesc">ask rule 命中 → ASK（除非 sandbox 已自动允许）</div>
+        <div class="sout"><span class="ot o-ask">→ ASK</span><span class="ot o-pass">无匹配 → 继续</span></div>
+      </div>
+
+      <div class="step s-neutral">
+        <div class="step-hdr"><span class="snum">1c</span><span class="sname">tool.checkPermissions(input, context)</span></div>
+        <div class="sdesc">工具自身权限检查：Bash 子命令规则、路径安全检查、工具特定逻辑</div>
+        <div class="sout"><span class="ot o-deny">→ DENY</span><span class="ot o-ask">→ ASK</span><span class="ot o-pass">通过 → 继续</span></div>
+      </div>
+
+      <div class="step s-deny">
+        <div class="step-hdr"><span class="snum">1d</span><span class="sname">tool returned deny?</span></div>
+        <div class="sdesc">1c 中工具 checkPermissions 返回明确 deny 结果</div>
+        <div class="sout"><span class="ot o-deny">→ DENY</span><span class="ot o-pass">否 → 继续</span></div>
+      </div>
+
+      <div class="step-gap"></div>
+
+      <div class="step s-immune">
+        <div class="step-hdr"><span class="snum">1e</span><span class="sname">tool.requiresUserInteraction()?</span><span class="ibadge">bypass-immune</span></div>
+        <div class="sdesc">工具必须与用户交互 → 强制 ASK，bypassPermissions 模式下也无法绕过</div>
+        <div class="sout"><span class="ot o-ask">→ ASK（强制，不可绕过）</span><span class="ot o-pass">否 → 继续</span></div>
+      </div>
+
+      <div class="step s-immune">
+        <div class="step-hdr"><span class="snum">1f</span><span class="sname">content-specific ask rule?</span><span class="ibadge">bypass-immune</span></div>
+        <div class="sdesc">内容特定的 ask 规则（ruleBehavior === 'ask'）→ bypassPermissions 也无法绕过</div>
+        <div class="sout"><span class="ot o-ask">→ ASK（bypass-immune）</span><span class="ot o-pass">无 → 继续</span></div>
+      </div>
+
+      <div class="step s-immune">
+        <div class="step-hdr"><span class="snum">1g</span><span class="sname">safetyCheck? (.git / .claude / .vscode / shell configs)</span><span class="ibadge">bypass-immune</span></div>
+        <div class="sdesc">.git/ · .claude/ · .vscode/ · .github/workflows/ · .bashrc · .zshrc 等 → 强制确认，所有模式均无法绕过</div>
+        <div class="sout"><span class="ot o-ask">→ ASK（任何模式均不可绕过）</span><span class="ot o-pass">安全 → 继续</span></div>
+      </div>
+
+      <div class="step-gap"></div>
+
+      <div class="step s-allow">
+        <div class="step-hdr"><span class="snum">2a</span><span class="sname">Should bypass permissions?</span></div>
+        <div class="sdesc">mode === 'bypassPermissions'  OR  (mode === 'plan' &amp;&amp; isBypassPermissionsModeAvailable) → 直接放行</div>
+        <div class="sout"><span class="ot o-allow">→ ALLOW</span><span class="ot o-pass">否 → 继续</span></div>
+      </div>
+
+      <div class="step s-allow">
+        <div class="step-hdr"><span class="snum">2b</span><span class="sname">Always-allowed rule（整体工具 allow 规则）?</span></div>
+        <div class="sdesc">整体工具 allow 规则命中（settings.json allow[] 中的整工具规则）</div>
+        <div class="sout"><span class="ot o-allow">→ ALLOW</span><span class="ot o-pass">无 → 继续</span></div>
+      </div>
+
+      <div class="step-gap"></div>
+
+      <div class="step s-ask">
+        <div class="step-hdr"><span class="snum">3</span><span class="sname">passthrough → ask（兜底转换）</span></div>
+        <div class="sdesc">所有步骤均无明确决策时，转换为 ask，传入后处理层（dontAsk / auto / headless / Handler Chain）</div>
+        <div class="sout"><span class="ot o-ask">→ ASK（传递给后处理层）</span></div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: notes -->
+    <div class="pnotes">
+
+      <div class="pn pn-hl">
+        <div class="pn-head">⚠ bypass-immune — 三个不可绕过的检查点</div>
+        <div class="pn-body">
+步骤 <span class="r">1e · 1f · 1g</span> 是 bypass-immune 检查点。<br>
+即使在 <span class="r">bypassPermissions</span> 模式下，<br>
+这三步产生的 ASK 结果也<strong style="color:#fca5a5;">永不会被绕过</strong>。<br>
+这是系统最后一道安全防线。<br><br>
+Step 1a 的 DENY 也不可绕过（最高优先级）。
+        </div>
+      </div>
+
+      <div class="pn pn-bypass">
+        <div class="pn-head">bypassPermissions 模式（Step 2a）</div>
+        <div class="pn-body">
+条件: <span class="k">mode === 'bypassPermissions'</span><br>
+  OR (<span class="k">mode === 'plan'</span> &amp;&amp; isBypassAvail)<br><br>
+在 steps 1a-1g 全部通过后 → <span class="g">ALLOW</span><br><br>
+<span class="r">仍无法绕过:</span> 1a(deny) · 1e · 1f · 1g<br>
+适用场景: 高信任自动化脚本
+        </div>
+      </div>
+
+      <div class="pn pn-dontask">
+        <div class="pn-head">dontAsk 模式（后处理层）</div>
+        <div class="pn-body">
+流水线输出 <span class="y">'ask'</span><br>
+  ↓ mode === <span class="k">'dontAsk'</span><br>
+<span class="y">ASK</span> → <span class="r">DENY</span>（静默）<br>
+msg: DONT_ASK_REJECT_MESSAGE(tool)<br>
+reason: <span class="v">{ type:'mode', mode:'dontAsk' }</span><br><br>
+<span style="color:#374151;">典型: --dangerously-skip-permissions</span><br>
+<span style="color:#374151;">无人值守 CI/CD 全自动场景</span>
+        </div>
+      </div>
+
+      <div class="pn pn-auto">
+        <div class="pn-head">auto 模式（后处理 · AI分类器接管）</div>
+        <div class="pn-body">
+触发: <span class="k">TRANSCRIPT_CLASSIFIER</span> gate<br>
+  &amp;&amp; (mode === <span class="k">'auto'</span><br>
+  OR (mode==='plan' &amp;&amp; autoModeActive))<br><br>
+流水线输出 'ask' → AI分类器接管：<br>
+<span class="g">1.</span> acceptEdits 快速路径 → <span class="g">ALLOW</span><br>
+<span class="g">2.</span> 安全工具白名单 → <span class="g">ALLOW</span><br>
+<span class="g">3.</span> YoloClassifier API → ALLOW/DENY<br><br>
+断路器: consecutiveDenials 超限<br>
+  → fallback → interactive<br>
+<span class="r">autoModeCircuitBroken = true</span>
+        </div>
+      </div>
+
+      <div style="padding:10px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:6px;">
+        <div style="font-size:12px;font-family:'JetBrains Mono',monospace;color:#60a5fa;margin-bottom:6px;letter-spacing:.06em;text-transform:uppercase;">headless / 无头模式后处理</div>
+        <div style="font-size:13px;font-family:'JetBrains Mono',monospace;color:#4b5563;line-height:1.7;">
+shouldAvoidPermissionPrompts<br>
+  → PermissionRequest hooks<br>
+  → 无法弹框 → AUTO-DENY
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── HANDLER CHAIN + AUTO CLASSIFIER ───────────────── -->
+<div class="two-col">
+
+  <div class="panel">
+    <div class="panel-title">Handler Chain（hasPermissionsToUseTool 返回 'ask' 后触发）</div>
+    <div style="font-size:13px;color:#64748b;margin-bottom:12px;">Handler Chain 在 hasPermissionsToUseToolInner 流水线<strong style="color:#94a3b8;">之后</strong>运行，是 useCanUseTool.tsx 中的第二层处理，仅当流水线最终输出 <code style="color:#fbbf24;font-family:'JetBrains Mono',monospace;">ask</code> 时触发。</div>
+    <div class="hchain">
+      <div class="hc hc1">
+        <div class="hc-tag">Step 4a · Coordinator Worker</div>
+        <div class="hc-name">coordinatorHandler</div>
+        <div class="hc-desc">awaitAutomatedChecksBeforeDialog 标志位为 true 时，先执行来自 Coordinator 的自动授权检查，通过后放行</div>
+      </div>
+      <div class="hc-arr">↓ 未处理则继续</div>
+      <div class="hc hc2">
+        <div class="hc-tag">Step 4b · Swarm Worker</div>
+        <div class="hc-name">swarmWorkerHandler</div>
+        <div class="hc-desc">Worker 模式下，将权限请求通过 mailbox 转发给 Lead Agent，等待 Coordinator 授权决策</div>
+      </div>
+      <div class="hc-arr">↓ 未处理则继续</div>
+      <div class="hc hc3">
+        <div class="hc-tag">Step 4c · BASH_CLASSIFIER（竞态 2s）</div>
+        <div class="hc-name">speculative classifier check</div>
+        <div class="hc-desc">2秒竞态：投机性分类器与对话框并跑。高置信度匹配 → ALLOW，跳过用户确认对话框</div>
+      </div>
+      <div class="hc-arr">↓ 无结论则继续</div>
+      <div class="hc hc4">
+        <div class="hc-tag">Step 4d · Interactive（最终兜底）</div>
+        <div class="hc-name">interactiveHandler</div>
+        <div class="hc-desc">弹出确认对话框，请求队列化防并发。Yes → 本次允许 · No → 拒绝并记入 permissionDenials[] · Always → 允许并写入 settings.json（断路器: 连续拒绝≥3 → 建议切换 plan mode）</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">auto 模式 AI 分类器（三级优化路径 · 快→慢）</div>
+    <div style="font-size:13px;color:#64748b;margin-bottom:12px;">目标：在保持安全性的前提下尽量跳过昂贵的 API 调用。三级路径按速度从快到慢依次尝试。</div>
+    <div class="ctiers">
+      <div class="ct ct1">
+        <div class="ct-num">1</div>
+        <div class="ct-tag">FAST PATH · acceptEdits 快速路径</div>
+        <div class="ct-name">acceptEdits 模拟检查</div>
+        <div class="ct-desc">若该工具在 acceptEdits 模式下会被允许 → 直接 ALLOW。<br>跳过 YoloClassifier API 调用，最快路径。</div>
+      </div>
+      <div class="ct ct2">
+        <div class="ct-num">2</div>
+        <div class="ct-tag">ALLOWLIST · 安全工具白名单</div>
+        <div class="ct-name">isAutoModeAllowlistedTool(tool.name)</div>
+        <div class="ct-desc">已知安全工具直接 ALLOW，无需分类器。<br>覆盖 Read · Glob · Grep 等纯只读工具。</div>
+      </div>
+      <div class="ct ct3">
+        <div class="ct-num">3</div>
+        <div class="ct-tag">CLASSIFIER · YoloClassifier API（最慢）</div>
+        <div class="ct-name">classifyYoloAction(messages, action)</div>
+        <div class="ct-desc">formatActionForClassifier(tool.name, input)<br>→ 2阶段分类: fast + thinking<br>shouldBlock: false → ALLOW（记 'auto-mode'）<br>shouldBlock: true → DENY（记 auto-mode-denial）</div>
+      </div>
+    </div>
+    <div style="margin-top:10px;padding:10px;background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.12);border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#4b5563;line-height:1.75;">
+      <span style="color:#fca5a5;">断路器:</span> consecutiveDenials / totalDenials 超限<br>
+        → autoModeCircuitBroken = true → fallback interactive<br>
+      <span style="color:#fca5a5;">tengu_iron_gate_closed:</span> true=fail-closed(拒绝) / false=fail-open(放行)<br>
+      <span style="color:#fca5a5;">PowerShell例外:</span> 需 POWERSHELL_AUTO_MODE flag 才允许分类器处理
+    </div>
+  </div>
+
+</div>
+
+<!-- ── BOTTOM GRID ─────────────────────────────────────── -->
+<div class="bot3">
+
+  <div class="panel">
+    <div class="panel-title">bypass-immune 例外清单</div>
+    <div style="font-size:13px;color:#64748b;margin-bottom:10px;">以下检查在 <code style="color:#ef4444;font-family:'JetBrains Mono',monospace;">bypassPermissions</code> 模式下也无法绕过：</div>
+    <div class="immune-list">
+      <div class="bi"><div class="bi-step">Step 1a · DENY rules</div><div class="bi-desc">deny 规则匹配 → 强制 DENY，优先级最高</div></div>
+      <div class="bi"><div class="bi-step">Step 1e · requiresUserInteraction</div><div class="bi-desc">工具必须用户交互 → 强制 ASK，绝对不可绕过</div></div>
+      <div class="bi"><div class="bi-step">Step 1f · content-specific ask rule</div><div class="bi-desc">ruleBehavior === 'ask' 的内容特定规则 → ASK</div></div>
+      <div class="bi"><div class="bi-step">Step 1g · .git/ .claude/ .vscode/</div><div class="bi-desc">系统关键目录修改 → ASK（bypass-immune）</div></div>
+      <div class="bi"><div class="bi-step">Step 1g · .github/workflows/ 修改</div><div class="bi-desc">CI/CD 管道文件修改 → ASK（bypass-immune）</div></div>
+      <div class="bi"><div class="bi-step">Step 1g · shell 配置文件</div><div class="bi-desc">.bashrc · .zshrc · .profile · .bash_profile → ASK</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">权限规则来源（8种 · 优先级从高到低）</div>
+    <div class="perm-levels">
+      <div class="pl-item"><div class="pl-num l1">1</div><div><div class="pl-name">policySettings</div><div class="pl-path">企业管理员推送，最高优先级，只读</div></div></div>
+      <div class="pl-item"><div class="pl-num l2">2</div><div><div class="pl-name">flagSettings</div><div class="pl-path">--allowed-tools CLI 标志</div></div></div>
+      <div class="pl-item"><div class="pl-num l2">3</div><div><div class="pl-name">userSettings</div><div class="pl-path">~/.claude/settings.json（全局）</div></div></div>
+      <div class="pl-item"><div class="pl-num l3">4</div><div><div class="pl-name">projectSettings</div><div class="pl-path">.claude/settings.json（项目级，可 git 提交）</div></div></div>
+      <div class="pl-item"><div class="pl-num l3">5</div><div><div class="pl-name">localSettings</div><div class="pl-path">.claude/settings.local.json（gitignore）</div></div></div>
+      <div class="pl-item"><div class="pl-num l4">6</div><div><div class="pl-name">cliArg / command</div><div class="pl-path">运行时参数 / 斜杠命令（只读，不可删除）</div></div></div>
+      <div class="pl-item"><div class="pl-num l5">7</div><div><div class="pl-name">session</div><div class="pl-path">会话内临时授权（会话结束即失效）</div></div></div>
+    </div>
+    <div style="margin-top:10px;padding:8px;background:rgba(0,0,0,.3);border-radius:6px;font-size:13px;font-family:'JetBrains Mono',monospace;color:#374151;line-height:1.7;">
+      企业策略: <span style="color:#fca5a5;">policySettings</span> 最高<br>
+      shouldAllowManagedPermissionRulesOnly()<br>
+      开启时→清除所有非 policy 规则
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">高危操作拦截清单（DANGEROUS_BASH_PATTERNS）</div>
+    <div class="danger-list">
+      <div class="di"><span style="font-size:12px;">⛔</span><span class="di-cmd">rm -rf / · rm -rf *</span><span class="dbadge db-deny">强制拒绝</span></div>
+      <div class="di"><span style="font-size:12px;">⛔</span><span class="di-cmd">curl * | bash</span><span class="dbadge db-deny">强制拒绝</span></div>
+      <div class="di"><span style="font-size:12px;">⚡</span><span class="di-cmd">git push --force</span><span class="dbadge db-warn">强制确认</span></div>
+      <div class="di"><span style="font-size:12px;">⚡</span><span class="di-cmd">git reset --hard</span><span class="dbadge db-warn">强制确认</span></div>
+      <div class="di"><span style="font-size:12px;">⚡</span><span class="di-cmd">DROP TABLE · TRUNCATE</span><span class="dbadge db-warn">强制确认</span></div>
+      <div class="di"><span style="font-size:12px;">⚡</span><span class="di-cmd">.git/ .claude/ .vscode/</span><span class="dbadge db-imm">bypass-immune</span></div>
+      <div class="di"><span style="font-size:12px;">⚡</span><span class="di-cmd">sudo · chmod 777</span><span class="dbadge db-warn">强制确认</span></div>
+      <div class="di"><span style="font-size:12px;">⚡</span><span class="di-cmd">bash / sh / python / node</span><span class="dbadge db-warn">危险模式</span></div>
+      <div class="di"><span style="font-size:12px;">⛔</span><span class="di-cmd">iex · invoke-expression (PS)</span><span class="dbadge db-deny">PowerShell危险</span></div>
+      <div class="di"><span style="font-size:12px;">⚡</span><span class="di-cmd">eval / exec / xargs / sudo</span><span class="dbadge db-warn">危险模式</span></div>
+    </div>
+    <div style="margin-top:8px;font-size:12px;font-family:'JetBrains Mono',monospace;color:#374151;line-height:1.6;">
+      Ant内部额外: gh·curl·wget·git·kubectl·aws·gcloud·Tmux<br>
+      PowerShell额外: pwsh·cmd·wsl·new-object·add-type
+    </div>
+  </div>
+
+</div>
+
+</div>
+</body>
+</html>

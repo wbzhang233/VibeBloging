@@ -1,0 +1,271 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code · 上下文压缩系统 · 6种策略全景</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#020409;--text:#e2e8f0;--muted:#4b5563;--cc:#3b82f6;--green:#10b981;--amber:#f59e0b;--red:#ef4444;--purple:#8b5cf6;--cyan:#06b6d4;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 50% 40% at 50% 50%,rgba(139,92,246,.04) 0%,transparent 60%),linear-gradient(rgba(59,130,246,.012) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,.012) 1px,transparent 1px);background-size:auto,40px 40px,40px 40px;z-index:0;pointer-events:none;}
+.page{position:relative;z-index:1;padding:32px 24px 80px;max-width:1500px;margin:0 auto;}
+.badge{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(139,92,246,.3);background:rgba(139,92,246,.08);padding:4px 14px;border-radius:100px;font-size:13px;color:#c084fc;letter-spacing:.15em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:14px;}
+.dot{width:6px;height:6px;border-radius:50%;background:#8b5cf6;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(139,92,246,.5)}50%{box-shadow:0 0 0 8px rgba(139,92,246,0)}}
+h1{font-size:clamp(24px,4vw,48px);font-weight:700;line-height:1.1;margin-bottom:6px;}
+h1 .hl{color:#c084fc;}
+.subtitle{color:var(--muted);font-size:13px;font-family:'JetBrains Mono',monospace;margin-bottom:36px;}
+
+/* STRATEGY CARDS */
+.strategies{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:28px;}
+@media(max-width:1100px){.strategies{grid-template-columns:1fr 1fr;}}
+@media(max-width:700px){.strategies{grid-template-columns:1fr;}}
+
+.strat{border-radius:12px;padding:16px;border:1px solid var(--s-border);background:var(--s-bg);position:relative;overflow:hidden;}
+.strat::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--s-color);box-shadow:0 0 10px var(--s-color);}
+.s0{--s-color:#06b6d4;--s-border:rgba(6,182,212,.25);--s-bg:rgba(6,182,212,.04);}
+.s1{--s-color:#3b82f6;--s-border:rgba(59,130,246,.25);--s-bg:rgba(59,130,246,.04);}
+.s2{--s-color:#8b5cf6;--s-border:rgba(139,92,246,.25);--s-bg:rgba(139,92,246,.04);}
+.s3{--s-color:#10b981;--s-border:rgba(16,185,129,.25);--s-bg:rgba(16,185,129,.04);}
+.s4{--s-color:#f59e0b;--s-border:rgba(245,158,11,.25);--s-bg:rgba(245,158,11,.04);}
+.s5{--s-color:#ef4444;--s-border:rgba(239,68,68,.25);--s-bg:rgba(239,68,68,.04);}
+.s6{--s-color:#8b5cf6;--s-border:rgba(139,92,246,.2);--s-bg:rgba(139,92,246,.03);}
+
+.s-num{position:absolute;right:12px;top:12px;width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;font-family:'JetBrains Mono',monospace;background:var(--s-bg);border:1px solid var(--s-border);color:var(--s-color);}
+.s-trigger{font-size:12px;font-family:'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--s-color);margin-bottom:5px;}
+.s-name{font-size:13px;font-weight:700;color:#fff;margin-bottom:6px;}
+.s-gate{font-size:12px;font-family:'JetBrains Mono',monospace;padding:1px 6px;border-radius:3px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);color:#fbbf24;display:inline-block;margin-bottom:8px;}
+.s-desc{font-size:13px;color:#94a3b8;line-height:1.5;margin-bottom:10px;}
+.s-detail{font-family:'JetBrains Mono',monospace;font-size:12px;color:#4b5563;line-height:1.7;background:rgba(0,0,0,.3);padding:8px 10px;border-radius:5px;}
+.s-detail .k{color:#c084fc;}.s-detail .v{color:#86efac;}.s-detail .c{color:#374151;}.s-detail .r{color:#f87171;}.s-detail .g{color:#34d399;}
+
+/* CONTEXT WINDOW BAR */
+.ctx-section{background:rgba(0,0,0,.4);border:1px solid rgba(59,130,246,.2);border-radius:14px;padding:24px;margin-bottom:24px;}
+.ctx-title{font-size:13px;color:#60a5fa;letter-spacing:.12em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:16px;}
+
+.ctx-bar{display:flex;height:40px;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.06);margin-bottom:8px;}
+.cb-seg{display:flex;align-items:center;justify-content:center;font-size:12px;font-family:'JetBrains Mono',monospace;padding:0 6px;transition:all .3s;}
+.cb-seg:hover{filter:brightness(1.3);}
+
+.ctx-legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;}
+.cl-item{display:flex;align-items:center;gap:6px;}
+.cl-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
+.cl-label{font-size:13px;font-family:'JetBrains Mono',monospace;color:var(--muted);}
+
+/* THRESHOLD INDICATORS */
+.threshold-bar{position:relative;height:20px;background:rgba(255,255,255,.03);border-radius:4px;border:1px solid rgba(255,255,255,.05);overflow:hidden;margin-bottom:6px;}
+.tb-fill{height:100%;border-radius:3px;transition:width 1s ease;}
+.tb-label{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:12px;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,.4);}
+.tb-mark{position:absolute;top:0;bottom:0;width:2px;background:var(--tm-color);box-shadow:0 0 6px var(--tm-color);}
+.tb-mark-label{position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--tm-color);white-space:nowrap;}
+
+/* TWO-COL */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+@media(max-width:800px){.two-col{grid-template-columns:1fr;}}
+.panel{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:18px;}
+.panel-title{font-size:13px;color:#60a5fa;letter-spacing:.12em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:14px;}
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="badge"><span class="dot"></span>InsightClaudeCode · Figures · Vol.05</div>
+<h1>上下文压缩系统<br><span class="hl">6种策略全景 · 触发机制 · 永续会话设计</span></h1>
+<p class="subtitle">基于 src/services/compact/autoCompact.ts · s06-context-compact.md · query.ts</p>
+
+<!-- CONTEXT WINDOW VISUALIZATION -->
+<div class="ctx-section">
+  <div class="ctx-title">上下文窗口（200K tokens）使用率与压缩触发线</div>
+  <div style="position:relative;margin-bottom:24px;">
+    <div class="ctx-bar">
+      <div class="cb-seg" style="width:2.5%;background:rgba(245,158,11,.2);color:#fbbf24;">SysPrompt 5K</div>
+      <div class="cb-seg" style="width:4%;background:rgba(245,158,11,.15);color:#fbbf24;">CLAUDE.md 8K</div>
+      <div class="cb-seg" style="width:2.5%;background:rgba(16,185,129,.15);color:#34d399;">Mem 5K</div>
+      <div class="cb-seg" style="width:17.5%;background:rgba(59,130,246,.15);color:#60a5fa;">工具结果 35K</div>
+      <div class="cb-seg" style="width:42.5%;background:rgba(59,130,246,.1);color:#60a5fa;">对话历史 85K</div>
+      <div class="cb-seg" style="width:31%;background:rgba(255,255,255,.03);color:#374151;">剩余 62K</div>
+    </div>
+    <div style="font-size:13px;font-family:'JetBrains Mono',monospace;color:#4b5563;margin-top:4px;display:flex;justify-content:space-between;">
+      <span>0</span>
+      <span style="color:#f59e0b;font-weight:700;">▲ WARNING_THRESHOLD - 20K buffer (74%)</span>
+      <span style="color:#ef4444;font-weight:700;">▲ AUTOCOMPACT threshold (~93%)</span>
+      <span>200K</span>
+    </div>
+  </div>
+  <div class="ctx-legend">
+    <div class="cl-item"><div class="cl-dot" style="background:rgba(245,158,11,.6);"></div><span class="cl-label">固定上下文（SysPrompt + CLAUDE.md）</span></div>
+    <div class="cl-item"><div class="cl-dot" style="background:rgba(16,185,129,.6);"></div><span class="cl-label">Memory Files</span></div>
+    <div class="cl-item"><div class="cl-dot" style="background:rgba(59,130,246,.5);"></div><span class="cl-label">工具结果 + 对话历史（动态增长）</span></div>
+    <div class="cl-item"><div class="cl-dot" style="background:rgba(255,255,255,.1);"></div><span class="cl-label">剩余空间</span></div>
+  </div>
+</div>
+
+<!-- 6 STRATEGIES -->
+<div style="font-size:13px;color:#60a5fa;letter-spacing:.12em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:14px;">6种压缩策略（按触发阶段排序）</div>
+<div class="strategies">
+
+  <div class="strat s0">
+    <div class="s-num">0</div>
+    <div class="s-trigger">工具执行时触发</div>
+    <div class="s-name">persistedOutput</div>
+    <div class="s-desc">工具输出超阈值时写入磁盘，消息中替换为预览标记。第一道防线，在输出进入上下文之前拦截。</div>
+    <div class="s-detail">
+触发阈值: 通用 <span class="v">50KB</span> / Bash <span class="v">30KB</span><br>
+写入路径: <span class="g">.task_outputs/tool-results/{id}.txt</span><br>
+消息替换: <span class="k">&lt;persisted-output&gt;</span><br>
+  Output too large (<span class="r">48.8KB</span>). Saved to: ...<br>
+  Preview (first <span class="v">2000</span> chars): ...<br>
+<span class="k">&lt;/persisted-output&gt;</span><br>
+后续: 模型可用 Read 读取完整内容
+    </div>
+  </div>
+
+  <div class="strat s1">
+    <div class="s-num">1</div>
+    <div class="s-trigger">每轮推理前静默触发</div>
+    <div class="s-name">microCompact</div>
+    <div class="s-desc">每次 LLM 调用前自动扫描，将3轮以前的旧 tool_result 替换为占位符。对用户完全不可见。</div>
+    <div class="s-detail">
+扫描: 所有 tool_result 条目<br>
+保留: <span class="g">read_file</span> 结果（参考材料）<br>
+替换: <span class="k">"[Previous: used {tool_name}]"</span><br>
+策略: 仅替换3轮以前的结果<br>
+效果: 无感知地清理过期工具输出
+    </div>
+  </div>
+
+  <div class="strat s2">
+    <div class="s-num">2</div>
+    <div class="s-trigger">tokens &gt; AUTOCOMPACT_THRESHOLD</div>
+    <div class="s-name">autoCompact</div>
+    <div class="s-gate">Feature Gate: 默认开启</div>
+    <div class="s-desc">主要自动压缩策略。先保存完整 transcript，再用 LLM 摘要整个对话，替换所有消息。</div>
+    <div class="s-detail">
+常量:<br>
+  AUTOCOMPACT_BUFFER_TOKENS = <span class="v">13,000</span><br>
+  WARNING_THRESHOLD_BUFFER  = <span class="v">20,000</span><br>
+  MAX_OUTPUT_TOKENS_FOR_SUMMARY = <span class="v">20,000</span><br>
+  MAX_CONSECUTIVE_FAILURES = <span class="r">3</span> (断路器)<br>
+<br>
+流程:<br>
+  1. 保存 transcript → <span class="g">.transcripts/{ts}.jsonl</span><br>
+  2. LLM摘要整个对话（80K字符上限）<br>
+  3. messages = [{summary}]<br>
+<br>
+环境变量覆盖:<br>
+  <span class="k">CLAUDE_CODE_AUTO_COMPACT_WINDOW</span><br>
+  <span class="k">CLAUDE_AUTOCOMPACT_PCT_OVERRIDE</span>
+    </div>
+  </div>
+
+  <div class="strat s3">
+    <div class="s-num">3</div>
+    <div class="s-trigger">模型主动调用 compact 工具</div>
+    <div class="s-name">manualCompact</div>
+    <div class="s-desc">模型自主判断时机，主动调用 compact 工具触发。与 autoCompact 完全相同的机制，区别在于决策者是模型而非阈值。</div>
+    <div class="s-detail">
+触发者: 模型（而非阈值触发）<br>
+机制: 与 autoCompact 完全相同<br>
+<br>
+适用场景:<br>
+  - 完成阶段性任务后主动清理<br>
+  - 预判即将进行大量工具调用前<br>
+  - 模型认为当前历史冗余较多时
+    </div>
+  </div>
+
+  <div class="strat s4">
+    <div class="s-num">4</div>
+    <div class="s-trigger">HISTORY_SNIP gate 激活</div>
+    <div class="s-name">snipCompact</div>
+    <div class="s-gate">Feature Gate: HISTORY_SNIP</div>
+    <div class="s-desc">外科手术式压缩。不是摘要整个对话，而是精准裁剪历史中占用空间最大的工具结果片段。</div>
+    <div class="s-detail">
+策略: 外科手术式裁剪（非全量摘要）<br>
+定位: 历史中最大的工具结果<br>
+操作: 精准替换而非整体摘要<br>
+优势: 保留更多历史结构与脉络<br>
+vs autoCompact: 更保守，侵入性更小
+    </div>
+  </div>
+
+  <div class="strat s5">
+    <div class="s-num">5</div>
+    <div class="s-trigger">REACTIVE_COMPACT gate 激活</div>
+    <div class="s-name">reactiveCompact</div>
+    <div class="s-gate">Feature Gate: REACTIVE_COMPACT</div>
+    <div class="s-desc">响应式压缩策略。在检测到上下文压力时主动响应，不等到阈值达到才触发。</div>
+    <div class="s-detail">
+触发: 检测到上下文压力信号<br>
+策略: 响应式，比 autoCompact 更主动<br>
+目标: 在问题严重前提前干预<br>
+配合: QueryState.has_attempted_compact<br>
+      防止同轮次重复压缩
+    </div>
+  </div>
+
+  <div class="strat s6">
+    <div class="s-num">6</div>
+    <div class="s-trigger">CONTEXT_COLLAPSE gate 激活</div>
+    <div class="s-name">contextCollapse</div>
+    <div class="s-gate">Feature Gate: CONTEXT_COLLAPSE</div>
+    <div class="s-desc">极端情况下的完全上下文折叠。当其他策略都无法解决问题时使用的最后手段。</div>
+    <div class="s-detail">
+触发: 极端情况（多次压缩失败后）<br>
+策略: 完全折叠，保留最少必要信息<br>
+场景: 超长会话 / 循环工具调用<br>
+状态: has_attempted_compact = True<br>
+      transition = "compact_retry"
+    </div>
+  </div>
+
+</div>
+
+<!-- TWO PANELS -->
+<div class="two-col">
+  <div class="panel">
+    <div class="panel-title">压缩触发状态机</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#4b5563;line-height:1.9;background:rgba(0,0,0,.3);padding:12px;border-radius:8px;">
+<span style="color:#e2e8f0;">正常对话</span><br>
+  │ tokens 持续增长<br>
+  ▼<br>
+<span style="color:#f59e0b;">[WARNING_THRESHOLD_BUFFER_TOKENS = 20K 前]</span><br>
+  │ → 显示警告提示给用户<br>
+  ▼<br>
+<span style="color:#8b5cf6;">[AUTOCOMPACT_THRESHOLD]</span> ← getAutoCompactThreshold(model) 计算<br>
+  │ 触发 autoCompact<br>
+  ▼<br>
+<span style="color:#34d399;">[成功]</span> → 继续, has_attempted_compact = True<br>
+  │<br>
+  ▼ 3次连续失败 (<span style="color:#ef4444;">断路器</span>)<br>
+  │ MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES = 3<br>
+  ▼<br>
+<span style="color:#ef4444;">[放弃压缩]</span> → 报错或以原始内容继续<br>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">QueryState 压缩相关字段 + 恢复流程</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#4b5563;line-height:1.9;background:rgba(0,0,0,.3);padding:12px;border-radius:8px;">
+<span style="color:#c084fc;">// QueryState 压缩控制字段</span><br>
+has_attempted_compact: <span style="color:#fbbf24;">False</span>  <span style="color:#374151;">← 防同轮重复压缩</span><br>
+transition: <span style="color:#86efac;">"compact_retry"</span>    <span style="color:#374151;">← 压缩后继续原因</span><br>
+max_output_tokens_override: <span style="color:#86efac;">N</span>  <span style="color:#374151;">← 压缩期间缩减输出</span><br>
+<br>
+<span style="color:#c084fc;">// TransitionReason 四种枚举</span><br>
+<span style="color:#86efac;">"tool_result_continuation"</span>  <span style="color:#374151;">← 正常工具结果继续</span><br>
+<span style="color:#86efac;">"max_tokens_recovery"</span>       <span style="color:#374151;">← 超200K恢复</span><br>
+<span style="color:#86efac;">"compact_retry"</span>             <span style="color:#374151;">← 压缩后重试</span><br>
+<span style="color:#86efac;">"transport_retry"</span>           <span style="color:#374151;">← 网络失败重试</span><br>
+<br>
+<span style="color:#c084fc;">// 恢复常量</span><br>
+ESCALATED_MAX_TOKENS<br>
+MAX_OUTPUT_TOKENS_RECOVERY_LIMIT = <span style="color:#f87171;">3</span>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

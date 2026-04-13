@@ -1,0 +1,317 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code · 工具执行引擎 · StreamingToolExecutor 并发模型</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#020409;--text:#e2e8f0;--muted:#4b5563;--cc:#3b82f6;--green:#10b981;--amber:#f59e0b;--red:#ef4444;--purple:#8b5cf6;--cyan:#06b6d4;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 60% 40% at 30% 50%,rgba(6,182,212,.04) 0%,transparent 60%),linear-gradient(rgba(59,130,246,.012) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,.012) 1px,transparent 1px);background-size:auto,40px 40px,40px 40px;z-index:0;pointer-events:none;}
+.page{position:relative;z-index:1;padding:32px 24px 80px;max-width:1500px;margin:0 auto;}
+.badge{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(6,182,212,.3);background:rgba(6,182,212,.08);padding:4px 14px;border-radius:100px;font-size:13px;color:#67e8f9;letter-spacing:.15em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:14px;}
+.dot{width:6px;height:6px;border-radius:50%;background:#06b6d4;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(6,182,212,.5)}50%{box-shadow:0 0 0 8px rgba(6,182,212,0)}}
+h1{font-size:clamp(24px,4vw,48px);font-weight:700;line-height:1.1;margin-bottom:6px;}
+h1 .hl{color:#67e8f9;}
+.subtitle{color:var(--muted);font-size:13px;font-family:'JetBrains Mono',monospace;margin-bottom:36px;}
+
+/* CONCURRENCY DIAGRAM */
+.concur-section{background:rgba(0,0,0,.4);border:1px solid rgba(6,182,212,.2);border-radius:14px;padding:24px;margin-bottom:24px;}
+.sec-title{font-size:13px;color:#67e8f9;letter-spacing:.12em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:20px;}
+
+/* TIMELINE BARS */
+.timeline{position:relative;}
+.tl-header{display:grid;grid-template-columns:130px 1fr;gap:0;margin-bottom:8px;}
+.tl-tool-label{font-size:13px;font-family:'JetBrains Mono',monospace;color:var(--muted);}
+.tl-time-axis{display:flex;justify-content:space-between;padding:0 8px;}
+.tl-time-tick{font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--muted);}
+
+.tl-row{display:grid;grid-template-columns:130px 1fr;gap:0;align-items:center;margin-bottom:6px;}
+.tl-name{font-size:13px;font-family:'JetBrains Mono',monospace;color:var(--tl-color);display:flex;align-items:center;gap:6px;}
+.tl-safe-badge{font-size:12px;padding:1px 5px;border-radius:3px;background:var(--tl-badge-bg);color:var(--tl-badge-color);border:1px solid var(--tl-badge-border);}
+.tl-track{background:rgba(255,255,255,.03);border-radius:4px;height:22px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.05);}
+.tl-bar{position:absolute;height:100%;border-radius:3px;display:flex;align-items:center;padding:0 8px;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:700;white-space:nowrap;}
+.tl-row.concurrent .tl-bar{background:rgba(6,182,212,.2);color:#67e8f9;border:1px solid rgba(6,182,212,.35);}
+.tl-row.sequential .tl-bar{background:rgba(59,130,246,.2);color:#60a5fa;border:1px solid rgba(59,130,246,.35);}
+.tl-row.blocking .tl-bar{background:rgba(245,158,11,.2);color:#fbbf24;border:1px solid rgba(245,158,11,.35);}
+
+/* TWO-COL */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;}
+@media(max-width:900px){.two-col{grid-template-columns:1fr;}}
+.panel{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:18px;}
+.panel-title{font-size:13px;color:#60a5fa;letter-spacing:.12em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:14px;}
+
+/* TOOL CATEGORIES */
+.tool-cats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:24px;}
+.tool-cat{border-radius:10px;padding:14px;border:1px solid var(--tc-border);background:var(--tc-bg);}
+.tc-file {--tc-border:rgba(6,182,212,.25);--tc-bg:rgba(6,182,212,.04);}
+.tc-exec {--tc-border:rgba(59,130,246,.25);--tc-bg:rgba(59,130,246,.04);}
+.tc-net  {--tc-border:rgba(16,185,129,.25);--tc-bg:rgba(16,185,129,.04);}
+.tc-collab{--tc-border:rgba(139,92,246,.25);--tc-bg:rgba(139,92,246,.04);}
+.tc-special{--tc-border:rgba(245,158,11,.25);--tc-bg:rgba(245,158,11,.04);}
+.tc-lsp{--tc-border:rgba(239,68,68,.25);--tc-bg:rgba(239,68,68,.04);}
+.tc-label{font-size:13px;font-family:'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--tc-color);margin-bottom:6px;}
+.tc-file .tc-label{--tc-color:#67e8f9;}
+.tc-exec .tc-label{--tc-color:#60a5fa;}
+.tc-net .tc-label{--tc-color:#34d399;}
+.tc-collab .tc-label{--tc-color:#c084fc;}
+.tc-special .tc-label{--tc-color:#fbbf24;}
+.tc-lsp .tc-label{--tc-color:#f87171;}
+.tc-tools{display:flex;flex-wrap:wrap;gap:4px;}
+.tc-tool{font-size:13px;font-family:'JetBrains Mono',monospace;padding:2px 7px;border-radius:3px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#94a3b8;}
+.tc-tool.safe{border-color:rgba(6,182,212,.3);color:#67e8f9;background:rgba(6,182,212,.08);}
+.tc-tool.unsafe{border-color:rgba(245,158,11,.3);color:#fbbf24;background:rgba(245,158,11,.08);}
+
+/* CODE */
+.code-box{background:#080d17;border:1px solid rgba(59,130,246,.2);border-radius:8px;padding:12px;overflow-x:auto;margin-top:8px;}
+pre{font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.8;color:#4b5563;white-space:pre;}
+.k{color:#c084fc;}.v{color:#86efac;}.c{color:#374151;}.g{color:#34d399;}.r{color:#f87171;}.y{color:#fbbf24;}.b{color:#60a5fa;}
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="badge"><span class="dot"></span>InsightClaudeCode · Figures · Vol.03</div>
+<h1>工具执行引擎<br><span class="hl">StreamingToolExecutor · 并发模型 · 45+工具全景</span></h1>
+<p class="subtitle">基于 src/services/tools/StreamingToolExecutor.ts · src/query.ts</p>
+
+<!-- CONCURRENCY DIAGRAM -->
+<div class="concur-section">
+  <div class="sec-title">并发执行模型（isConcurrencySafe 决定并行策略）</div>
+  <div class="timeline">
+    <div class="tl-header">
+      <div class="tl-tool-label">工具请求</div>
+      <div class="tl-time-axis">
+        <span class="tl-time-tick">T+0ms</span>
+        <span class="tl-time-tick">T+50ms</span>
+        <span class="tl-time-tick">T+100ms</span>
+        <span class="tl-time-tick">T+200ms</span>
+        <span class="tl-time-tick">T+500ms</span>
+        <span class="tl-time-tick">T+1000ms</span>
+      </div>
+    </div>
+
+    <!-- 场景1: 并发安全工具并行 -->
+    <div style="font-size:13px;color:#67e8f9;font-family:'JetBrains Mono',monospace;margin-bottom:8px;padding:4px 0;border-bottom:1px solid rgba(6,182,212,.1);">
+      场景A: 并发安全工具（isConcurrencySafe = true）→ 并行执行
+    </div>
+    <div class="tl-row concurrent">
+      <div class="tl-name" style="--tl-color:#67e8f9;">
+        <span>Read(main.ts)</span>
+        <span class="tl-safe-badge" style="--tl-badge-bg:rgba(6,182,212,.15);--tl-badge-color:#67e8f9;--tl-badge-border:rgba(6,182,212,.3);">safe</span>
+      </div>
+      <div class="tl-track">
+        <div class="tl-bar" style="left:0;width:25%;">Read · 250ms</div>
+      </div>
+    </div>
+    <div class="tl-row concurrent">
+      <div class="tl-name" style="--tl-color:#67e8f9;">
+        <span>Read(utils.ts)</span>
+        <span class="tl-safe-badge" style="--tl-badge-bg:rgba(6,182,212,.15);--tl-badge-color:#67e8f9;--tl-badge-border:rgba(6,182,212,.3);">safe</span>
+      </div>
+      <div class="tl-track">
+        <div class="tl-bar" style="left:0;width:18%;">Read · 180ms</div>
+      </div>
+    </div>
+    <div class="tl-row concurrent">
+      <div class="tl-name" style="--tl-color:#67e8f9;">
+        <span>Grep("class")</span>
+        <span class="tl-safe-badge" style="--tl-badge-bg:rgba(6,182,212,.15);--tl-badge-color:#67e8f9;--tl-badge-border:rgba(6,182,212,.3);">safe</span>
+      </div>
+      <div class="tl-track">
+        <div class="tl-bar" style="left:0;width:30%;">Grep · 300ms</div>
+      </div>
+    </div>
+    <div style="font-size:13px;font-family:'JetBrains Mono',monospace;color:#4b5563;margin:4px 0 16px 130px;">
+      ↑ 三个工具同时开始执行，总耗时 = max(250, 180, 300) = 300ms
+    </div>
+
+    <!-- 场景2: 非并发工具串行 -->
+    <div style="font-size:13px;color:#fbbf24;font-family:'JetBrains Mono',monospace;margin-bottom:8px;padding:4px 0;border-bottom:1px solid rgba(245,158,11,.1);">
+      场景B: 非并发工具（isConcurrencySafe = false）→ 串行独占执行
+    </div>
+    <div class="tl-row blocking">
+      <div class="tl-name" style="--tl-color:#fbbf24;">
+        <span>Bash(npm build)</span>
+        <span class="tl-safe-badge" style="--tl-badge-bg:rgba(245,158,11,.15);--tl-badge-color:#fbbf24;--tl-badge-border:rgba(245,158,11,.3);">blocking</span>
+      </div>
+      <div class="tl-track">
+        <div class="tl-bar" style="left:0;width:50%;">Bash · 500ms（独占执行）</div>
+      </div>
+    </div>
+    <div class="tl-row blocking" style="opacity:.5;">
+      <div class="tl-name" style="--tl-color:#fbbf24;">
+        <span>Write(output.js)</span>
+        <span class="tl-safe-badge" style="--tl-badge-bg:rgba(245,158,11,.15);--tl-badge-color:#fbbf24;--tl-badge-border:rgba(245,158,11,.3);">waiting</span>
+      </div>
+      <div class="tl-track">
+        <div class="tl-bar" style="left:50%;width:20%;">Write（等待Bash完成）</div>
+      </div>
+    </div>
+    <div style="font-size:13px;font-family:'JetBrains Mono',monospace;color:#4b5563;margin:4px 0 16px 130px;">
+      ↑ Bash 独占执行期间，Write 必须等待。siblingAbortController: Bash失败 → 终止所有兄弟子进程
+    </div>
+
+    <!-- 结果排序 -->
+    <div style="font-size:13px;color:#34d399;font-family:'JetBrains Mono',monospace;margin-bottom:8px;padding:4px 0;border-bottom:1px solid rgba(16,185,129,.1);">
+      结果排序：并发执行，但结果按原始请求顺序缓冲排序后输出
+    </div>
+    <div style="font-size:13px;font-family:'JetBrains Mono',monospace;color:#4b5563;padding:8px 0 0 0;">
+      请求顺序: [Read(a), Read(b), Grep(.)]  →  完成顺序: [Read(b)✓, Grep(.)✓, Read(a)✓]  →  输出顺序: [Read(a), Read(b), Grep(.)] ← 按请求序
+    </div>
+  </div>
+</div>
+
+<!-- TOOL CATEGORIES -->
+<div style="font-size:13px;color:#60a5fa;letter-spacing:.12em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:14px;">45+ 内置工具全景（绿色=并发安全，黄色=非并发）</div>
+<div class="tool-cats">
+  <div class="tool-cat tc-file">
+    <div class="tc-label">文件操作类</div>
+    <div class="tc-tools">
+      <span class="tc-tool safe">Read</span>
+      <span class="tc-tool unsafe">Write</span>
+      <span class="tc-tool unsafe">Edit</span>
+      <span class="tc-tool safe">Glob</span>
+      <span class="tc-tool safe">Grep</span>
+      <span class="tc-tool unsafe">NotebookEdit</span>
+    </div>
+  </div>
+  <div class="tool-cat tc-exec">
+    <div class="tc-label">执行类</div>
+    <div class="tc-tools">
+      <span class="tc-tool unsafe">Bash</span>
+      <span class="tc-tool unsafe">PowerShell</span>
+      <span class="tc-tool unsafe">REPL</span>
+      <span class="tc-tool safe">TaskOutput</span>
+      <span class="tc-tool unsafe">TaskStop</span>
+      <span class="tc-tool safe">SleepTool</span>
+    </div>
+  </div>
+  <div class="tool-cat tc-net">
+    <div class="tc-label">网络类</div>
+    <div class="tc-tools">
+      <span class="tc-tool safe">WebFetch</span>
+      <span class="tc-tool safe">WebSearch</span>
+      <span class="tc-tool safe">ListMcpResourcesTool</span>
+      <span class="tc-tool safe">ReadMcpResourceTool</span>
+    </div>
+  </div>
+  <div class="tool-cat tc-collab">
+    <div class="tc-label">协作/任务类</div>
+    <div class="tc-tools">
+      <span class="tc-tool unsafe">Agent</span>
+      <span class="tc-tool unsafe">SendMessage</span>
+      <span class="tc-tool unsafe">TaskCreate</span>
+      <span class="tc-tool safe">TaskGet</span>
+      <span class="tc-tool unsafe">TaskUpdate</span>
+      <span class="tc-tool safe">TaskList</span>
+      <span class="tc-tool unsafe">TodoWrite</span>
+    </div>
+  </div>
+  <div class="tool-cat tc-special">
+    <div class="tc-label">模式/Worktree类</div>
+    <div class="tc-tools">
+      <span class="tc-tool unsafe">EnterPlanMode</span>
+      <span class="tc-tool unsafe">ExitPlanMode</span>
+      <span class="tc-tool unsafe">EnterWorktreeTool</span>
+      <span class="tc-tool unsafe">ExitWorktreeTool</span>
+      <span class="tc-tool unsafe">ScheduleCronTool</span>
+      <span class="tc-tool unsafe">RemoteTriggerTool</span>
+      <span class="tc-tool unsafe">SkillTool</span>
+      <span class="tc-tool safe">ConfigTool</span>
+      <span class="tc-tool safe">AskUserQuestionTool</span>
+    </div>
+  </div>
+  <div class="tool-cat tc-lsp">
+    <div class="tc-label">系统/内部类</div>
+    <div class="tc-tools">
+      <span class="tc-tool safe">LSPTool</span>
+      <span class="tc-tool unsafe">MCPTool</span>
+      <span class="tc-tool unsafe">McpAuthTool</span>
+      <span class="tc-tool unsafe">BriefTool</span>
+      <span class="tc-tool unsafe">SyntheticOutputTool</span>
+      <span class="tc-tool unsafe">TeamCreate</span>
+      <span class="tc-tool unsafe">TeamDelete</span>
+    </div>
+  </div>
+</div>
+
+<!-- TOOL CONTROL PLANE + PIPELINE -->
+<div class="two-col">
+  <div class="panel">
+    <div class="panel-title">工具控制平面 4层架构（s02a）</div>
+    <div class="code-box">
+      <pre><span class="c">// Layer 1: ToolSpec（模型看到的）</span>
+tool = {
+  <span class="k">name</span>: <span class="v">"read_file"</span>,
+  <span class="k">description</span>: <span class="v">"Read file contents"</span>,
+  <span class="k">input_schema</span>: {...}
+}
+
+<span class="c">// Layer 2: Tool Router（路由决策）</span>
+<span class="b">if</span> name.startsWith(<span class="v">"mcp__"</span>): → MCP Client
+<span class="b">elif</span> name == <span class="v">"Agent"</span>:       → SubAgent Runner
+<span class="b">elif</span> name == <span class="v">"task_create"</span>: → Task System
+<span class="b">else</span>:                        → Native Handler
+
+<span class="c">// Layer 3: ToolUseContext（关键！共享环境）</span>
+ctx = {
+  <span class="k">tools</span>: handlers_map,
+  <span class="k">permission_context</span>: {...},
+  <span class="k">mcp_clients</span>: {...},
+  <span class="k">messages</span>: current_msgs,   <span class="c">// 可读</span>
+  <span class="k">app_state</span>: {...},
+  <span class="k">notifications</span>: [],
+  <span class="k">cwd</span>: <span class="v">"/path/to/project"</span>
+}
+
+<span class="c">// Layer 4: ToolResultEnvelope（标准化返回）</span>
+result = {
+  <span class="k">ok</span>: True,
+  <span class="k">content</span>: <span class="v">"..."</span>,
+  <span class="k">is_error</span>: False,
+  <span class="k">attachments</span>: []
+}</pre>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">单次工具调用完整管道</div>
+    <div class="code-box">
+      <pre><span class="c">// 1. 模型输出工具调用</span>
+{<span class="k">type</span>:<span class="v">"tool_use"</span>, <span class="k">name</span>:<span class="v">"Bash"</span>, <span class="k">input</span>:{<span class="v">"command"</span>:<span class="v">"ls"</span>}}
+
+<span class="c">// 2. 工具路由</span>
+router.route(<span class="v">"Bash"</span>) → native_handler
+
+<span class="c">// 3. 权限检查（5阶段）</span>
+permission_result = useCanUseTool(ctx)
+<span class="b">if</span> denied: <span class="r">return error</span>
+
+<span class="c">// 4. PreToolUse Hooks</span>
+pre_result = await runPreToolHooks(ctx)
+<span class="b">if</span> pre_result.blocked: <span class="r">return blocked_error</span>
+
+<span class="c">// 5. 实际执行（StreamingToolExecutor）</span>
+tracked = TrackedTool(isConcurrencySafe=False)
+result = await executor.execute(tracked, ctx)
+
+<span class="c">// 6. PostToolUse Hooks</span>
+await runPostToolHooks(result, ctx)
+
+<span class="c">// 7. 结果注入</span>
+messages.append({
+  <span class="k">role</span>:<span class="v">"tool"</span>, <span class="k">id</span>:tool_use_id, <span class="k">content</span>:result
+})</pre>
+    </div>
+    <div style="margin-top:12px;padding:10px;background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.2);border-radius:6px;font-size:13px;color:#78716c;font-family:'JetBrains Mono',monospace;">
+      FileStateCache / FileHistoryState: 跨轮次追踪文件变更，防止读取过期内容
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

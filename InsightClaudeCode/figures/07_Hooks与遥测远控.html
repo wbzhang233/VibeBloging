@@ -1,0 +1,334 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code · Hooks系统 + 遥测远控基础设施</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#020409;--text:#e2e8f0;--muted:#4b5563;--cc:#3b82f6;--green:#10b981;--amber:#f59e0b;--red:#ef4444;--purple:#8b5cf6;--cyan:#06b6d4;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 50% 40% at 80% 20%,rgba(239,68,68,.04) 0%,transparent 50%),radial-gradient(ellipse 40% 50% at 20% 80%,rgba(59,130,246,.03) 0%,transparent 50%),linear-gradient(rgba(59,130,246,.012) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,.012) 1px,transparent 1px);background-size:auto,auto,40px 40px,40px 40px;z-index:0;pointer-events:none;}
+.page{position:relative;z-index:1;padding:40px 32px 80px;max-width:1500px;margin:0 auto;}
+.badge{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(245,158,11,.3);background:rgba(245,158,11,.08);padding:5px 16px;border-radius:100px;font-size:13px;color:#fbbf24;letter-spacing:.15em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:16px;}
+.dot{width:7px;height:7px;border-radius:50%;background:#f59e0b;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.5)}50%{box-shadow:0 0 0 8px rgba(245,158,11,0)}}
+h1{font-size:clamp(32px,4vw,54px);font-weight:700;line-height:1.1;margin-bottom:8px;}
+h1 .hl{color:#fbbf24;}
+.subtitle{color:var(--muted);font-size:13px;font-family:'JetBrains Mono',monospace;margin-bottom:40px;}
+
+/* SECTION TITLE */
+.sec-title{font-size:13px;color:#60a5fa;letter-spacing:.12em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:16px;}
+
+/* TWO-COL */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px;}
+@media(max-width:900px){.two-col{grid-template-columns:1fr;}}
+
+/* PANEL */
+.panel{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:20px;}
+.panel-title{font-size:13px;color:#60a5fa;letter-spacing:.12em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:14px;}
+.code-box{background:#080d17;border:1px solid rgba(59,130,246,.2);border-radius:8px;padding:14px;overflow-x:auto;margin-top:8px;}
+pre{font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.8;color:#4b5563;white-space:pre;}
+.k{color:#c084fc;}.v{color:#86efac;}.c{color:#374151;}.g{color:#34d399;}.r{color:#f87171;}.b{color:#60a5fa;}.y{color:#fbbf24;}.w{color:#e2e8f0;}
+
+/* HOOKS TIMELINE */
+.hooks-section{background:rgba(0,0,0,.4);border:1px solid rgba(245,158,11,.2);border-radius:14px;padding:24px;margin-bottom:24px;}
+
+.hook-event{display:grid;grid-template-columns:220px 1fr 180px;gap:14px;align-items:start;padding:14px;border-radius:10px;border:1px solid var(--he-border);background:var(--he-bg);margin-bottom:10px;}
+.he-pre{--he-border:rgba(245,158,11,.25);--he-bg:rgba(245,158,11,.04);}
+.he-post{--he-border:rgba(59,130,246,.25);--he-bg:rgba(59,130,246,.04);}
+.he-stop{--he-border:rgba(16,185,129,.25);--he-bg:rgba(16,185,129,.04);}
+.he-other{--he-border:rgba(139,92,246,.2);--he-bg:rgba(139,92,246,.03);}
+.he-internal{--he-border:rgba(239,68,68,.15);--he-bg:rgba(239,68,68,.02);}
+
+.he-left{}
+.he-label{font-size:13px;font-family:'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--he-color);margin-bottom:4px;}
+.he-name{font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;}
+.he-timing{font-size:13px;font-family:'JetBrains Mono',monospace;color:var(--muted);}
+.he-pre .he-label{--he-color:#fbbf24;}
+.he-post .he-label{--he-color:#60a5fa;}
+.he-stop .he-label{--he-color:#34d399;}
+.he-other .he-label{--he-color:#c084fc;}
+.he-internal .he-label{--he-color:#f87171;}
+.he-desc{font-size:13px;color:#94a3b8;line-height:1.5;}
+.he-exit{font-family:'JetBrains Mono',monospace;font-size:13px;color:#4b5563;line-height:1.8;background:rgba(0,0,0,.3);padding:8px 10px;border-radius:6px;}
+.ex-0{color:#34d399;}.ex-1{color:#f87171;}.ex-2{color:#fbbf24;}.ex-j{color:#c084fc;}
+
+/* TELEMETRY */
+.tele-section{background:rgba(0,0,0,.4);border:1px solid rgba(239,68,68,.15);border-radius:14px;padding:24px;margin-bottom:24px;}
+
+.tele-pipes{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:16px;}
+.pipe-card{border-radius:10px;padding:16px;border:1px solid var(--pc-border);background:var(--pc-bg);}
+.pc-1p{--pc-border:rgba(59,130,246,.25);--pc-bg:rgba(59,130,246,.05);}
+.pc-3p{--pc-border:rgba(245,158,11,.25);--pc-bg:rgba(245,158,11,.04);}
+.pc-title{font-size:13px;font-weight:700;color:#fff;margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+.pc-label{font-size:13px;padding:2px 7px;border-radius:4px;font-family:'JetBrains Mono',monospace;}
+.pc-1p .pc-label{background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.3);}
+.pc-3p .pc-label{background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.3);}
+.pc-body{font-size:13px;color:#94a3b8;line-height:1.7;}
+.pc-detail{font-family:'JetBrains Mono',monospace;font-size:13px;color:#4b5563;margin-top:8px;line-height:1.7;background:rgba(0,0,0,.3);padding:8px 10px;border-radius:6px;}
+
+/* KILL SWITCHES */
+.kill-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+@media(max-width:900px){.kill-grid{grid-template-columns:1fr 1fr;}}
+.kill-item{border-radius:8px;padding:10px 12px;border:1px solid var(--ki-border);background:var(--ki-bg);}
+.ki-danger{--ki-border:rgba(239,68,68,.3);--ki-bg:rgba(239,68,68,.05);}
+.ki-warn{--ki-border:rgba(245,158,11,.25);--ki-bg:rgba(245,158,11,.04);}
+.ki-info{--ki-border:rgba(59,130,246,.2);--ki-bg:rgba(59,130,246,.03);}
+.ki-name{font-size:13px;font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--ki-name-color);margin-bottom:4px;}
+.ki-danger .ki-name{--ki-name-color:#f87171;}
+.ki-warn .ki-name{--ki-name-color:#fbbf24;}
+.ki-info .ki-name{--ki-name-color:#60a5fa;}
+.ki-desc{font-size:13px;color:#4b5563;line-height:1.4;}
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="badge"><span class="dot"></span>InsightClaudeCode · Figures · Vol.07</div>
+<h1>Hooks 系统 +<br><span class="hl">遥测与远控基础设施</span></h1>
+<p class="subtitle">基于 src/utils/hooks.js · docs/zh/ 遥测分析 · 远程控制文档</p>
+
+<!-- HOOKS EVENT BUS -->
+<div class="hooks-section">
+  <div class="sec-title">Hooks 事件总线（7种事件类型 · 2种内部专用）</div>
+
+  <div class="hook-event he-pre">
+    <div class="he-left">
+      <div class="he-label">可配置 · 可阻止</div>
+      <div class="he-name">PreToolUse</div>
+      <div class="he-timing">工具执行前触发</div>
+    </div>
+    <div class="he-desc">
+      最重要的 Hook。每次工具调用前触发，是整条链中唯一能阻止工具执行的 Hook。支持 matcher 过滤特定工具。可用于安全审计、危险命令拦截、前置验证。
+    </div>
+    <div class="he-exit">
+exit <span class="ex-0">0</span> → 继续执行工具<br>
+exit <span class="ex-1">1</span> → 阻止，stderr→错误<br>
+exit <span class="ex-2">2</span> → 注入对话，仍执行<br>
+JSON <span class="ex-j">{decision:"block"}</span> → 高级阻止
+    </div>
+  </div>
+
+  <div class="hook-event he-post">
+    <div class="he-left">
+      <div class="he-label">可配置 · 不可阻止</div>
+      <div class="he-name">PostToolUse</div>
+      <div class="he-timing">工具执行后触发</div>
+    </div>
+    <div class="he-desc">
+      工具执行完成后触发。不能阻止已完成的操作，但可以追加内容到工具结果。用于日志记录、自动格式化、运行测试（写文件后自动运行 lint）。
+    </div>
+    <div class="he-exit">
+exit <span class="ex-0">0</span> → 正常继续<br>
+exit <span class="ex-2">2</span> → stderr追加到结果<br>
+HookAttachment:<br>
+  <span class="ex-j">hook_cancelled</span><br>
+  <span class="ex-1">hook_blocking_error</span><br>
+  <span class="ex-2">hook_output</span>
+    </div>
+  </div>
+
+  <div class="hook-event he-stop">
+    <div class="he-left">
+      <div class="he-label">可配置</div>
+      <div class="he-name">Stop</div>
+      <div class="he-timing">模型最终输出时</div>
+    </div>
+    <div class="he-desc">模型停止生成并输出最终结果时触发。用于发送通知（"Claude已完成"）、自动保存会话摘要、触发后续自动化流程。</div>
+    <div class="he-exit">SessionStorage.flushSessionStorage()<br>通知推送<br>自动保存</div>
+  </div>
+
+  <div class="hook-event he-other">
+    <div class="he-left">
+      <div class="he-label">可配置</div>
+      <div class="he-name">TaskCompleted</div>
+      <div class="he-timing">任务完成时</div>
+    </div>
+    <div class="he-desc">Task 系统中的任务完成时触发（区别于 Stop）。用于任务完成回调、触发下游工作流。</div>
+    <div class="he-exit">TaskRecord.status → completed<br>结果回调</div>
+  </div>
+
+  <div class="hook-event he-other">
+    <div class="he-left">
+      <div class="he-label">可配置</div>
+      <div class="he-name">TeammateIdle + Notification</div>
+      <div class="he-timing">队友空闲时 / 需要关注时</div>
+    </div>
+    <div class="he-desc">TeammateIdle: 持久队友进入空闲状态，可用于资源回收或分配新任务。NotifyAfterTimeout: 长时间运行任务超时后的通知 Hook，避免用户等待不知情。</div>
+    <div class="he-exit">UserPromptSubmit:<br>用户消息进入时<br>输入预处理</div>
+  </div>
+
+  <div class="hook-event he-internal">
+    <div class="he-left">
+      <div class="he-label">⚠ 内部专用 · 不可外部配置</div>
+      <div class="he-name">PostSampling</div>
+      <div class="he-timing">模型采样完成后（内部）</div>
+    </div>
+    <div class="he-desc">
+      内部私有 Hook，不暴露在 settings.json 配置中。驱动 AutoDream、PromptSuggestion、EXTRACT_MEMORIES 等内部高级功能。仅 Anthropic 内部逻辑使用。
+    </div>
+    <div class="he-exit">
+AutoDream → 提示建议生成<br>PromptSuggestion → 对话建议<br>EXTRACT_MEMORIES → 自动记忆提取<br>JobClassifier → 任务分类<br>Feature Gate: <span class="ex-j">TEMPLATES</span>
+    </div>
+  </div>
+</div>
+
+<!-- TELEMETRY -->
+<div class="tele-section">
+  <div class="sec-title">遥测双管道 + 远程控制基础设施</div>
+
+  <div class="tele-pipes">
+    <div class="pipe-card pc-1p">
+      <div class="pc-title">第一方遥测（1P）<span class="pc-label">不可禁用</span></div>
+      <div class="pc-body">Claude Code → OpenTelemetry → api.anthropic.com<br>第一方遥测对直接 API 用户无法禁用。</div>
+      <div class="pc-detail">
+批处理: <span class="g">200 events/batch</span><br>
+刷新间隔: <span class="g">10s flush</span><br>
+仓库URL: SHA256 哈希后上报<br>
+<span class="r">OTEL_LOG_TOOL_DETAILS=1</span> → 记录完整工具输入<br>
+<br>
+数据类型:<br>
+  工具使用统计<br>
+  会话元数据<br>
+  性能指标<br>
+  错误事件
+      </div>
+    </div>
+    <div class="pipe-card pc-3p">
+      <div class="pc-title">第三方遥测（3P）<span class="pc-label">Datadog</span></div>
+      <div class="pc-body">Claude Code → Datadog<br>仅上报预审核的特定事件类型，不包含对话内容。</div>
+      <div class="pc-detail">
+批准事件: <span class="g">64种预定义类型</span><br>
+<br>
+环境指纹（部分哈希）:<br>
+  操作系统类型/版本<br>
+  Node.js 版本<br>
+  终端类型<br>
+  仓库URL（SHA256哈希）<br>
+  工作目录哈希
+      </div>
+    </div>
+  </div>
+
+  <!-- Remote Control -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+    <div>
+      <div style="font-size:13px;color:#f87171;font-family:'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;">远程设置轮询</div>
+      <div class="code-box">
+        <pre><span class="c">// 每小时轮询一次</span>
+GET /api/claude_code/settings
+  重试: <span class="g">5次</span>
+
+<span class="c">// 用户拒绝新设置时:</span>
+gracefulShutdownSync(<span class="r">1</span>)  <span class="c">← 优雅退出</span>
+
+<span class="c">// 模型版本远程覆盖:</span>
+<span class="k">tengu_ant_model_override</span>
+  → A/B测试 / 紧急降级</pre>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:13px;color:#fbbf24;font-family:'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;">MCP 协议层次</div>
+      <div class="code-box">
+        <pre>Claude Code (MCP Client)
+  │ JSON-RPC 2.0
+  ▼ Transport: <span class="g">stdio/sse/http/ws/sdk</span>
+MCP Server
+  ▼
+三种能力:
+  <span class="k">Tools</span>     → 可调用函数
+  <span class="k">Resources</span> → URI可读数据
+  <span class="k">Prompts</span>   → 参数化模板
+
+ConfigScope: <span class="y">local/user/project/</span>
+             <span class="y">dynamic/enterprise</span>
+OAuth: XAA (Cross-App Access)</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Kill Switches -->
+  <div class="sec-title">GrowthBook Kill Switches（远程紧急开关）</div>
+  <div class="kill-grid">
+    <div class="kill-item ki-danger">
+      <div class="ki-name">bypassPermissionsKillswitch</div>
+      <div class="ki-desc">远程绕过权限检查（紧急关闭，极危险）</div>
+    </div>
+    <div class="kill-item ki-danger">
+      <div class="ki-name">autoModeCircuitBreaker</div>
+      <div class="ki-desc">自动模式断路器，远程触发停止自动执行</div>
+    </div>
+    <div class="kill-item ki-warn">
+      <div class="ki-name">sinkKillswitch</div>
+      <div class="ki-desc">tengu_frond_boric，流量沉底（请求丢弃）</div>
+    </div>
+    <div class="kill-item ki-warn">
+      <div class="ki-name">voiceMode</div>
+      <div class="ki-desc">tengu_amber_quartz_disabled，远程禁用语音功能</div>
+    </div>
+    <div class="kill-item ki-info">
+      <div class="ki-name">fastMode</div>
+      <div class="ki-desc">penguin mode，快速响应模式切换</div>
+    </div>
+    <div class="kill-item ki-info">
+      <div class="ki-name">tengu_ant_model_override</div>
+      <div class="ki-desc">远程模型版本覆盖（A/B测试/紧急降级）</div>
+    </div>
+  </div>
+</div>
+
+<!-- HOOKS CONFIG EXAMPLE -->
+<div class="two-col">
+  <div class="panel">
+    <div class="panel-title">Hooks 配置示例</div>
+    <div class="code-box">
+      <pre><span class="c">// settings.json 中的 hooks 配置</span>
+{
+  <span class="k">"hooks"</span>: {
+    <span class="k">"PreToolUse"</span>: [
+      {
+        <span class="k">"matcher"</span>: <span class="v">"Bash"</span>,
+        <span class="k">"command"</span>: <span class="v">"python /path/to/audit.py"</span>
+      },
+      {
+        <span class="k">"matcher"</span>: <span class="v">"Write"</span>,
+        <span class="k">"command"</span>: <span class="v">"/path/to/lint-check.sh"</span>
+      }
+    ],
+    <span class="k">"Stop"</span>: [
+      {
+        <span class="k">"command"</span>: <span class="v">"notify-send 'Claude Done'"</span>
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">Hook 执行环境变量</div>
+    <div class="code-box">
+      <pre><span class="c"># Hook 脚本接收的环境变量</span>
+<span class="k">HOOK_EVENT</span>=<span class="v">PreToolUse</span>
+<span class="k">HOOK_TOOL_NAME</span>=<span class="v">Bash</span>
+<span class="k">HOOK_TOOL_INPUT</span>=<span class="v">'{"command":"ls -la"}'</span>
+<span class="k">HOOK_TOOL_OUTPUT</span>=<span class="v">'...'</span>  <span class="c"># PostToolUse only</span>
+
+<span class="c"># Matcher 规则</span>
+<span class="k">"matcher"</span>: <span class="v">"Bash"</span>        <span class="c"># 精确匹配</span>
+<span class="k">"matcher"</span>: <span class="v">"Bash(git *)"</span> <span class="c"># 参数模式</span>
+<span class="c"># 无matcher → 匹配所有工具</span>
+
+<span class="c"># Budget Tracking</span>
+<span class="k">maxBudgetUsd</span>:   USD上限
+<span class="k">taskBudget</span>:     token预算
+getCurrentTurnTokenBudget()
+createBudgetTracker()</pre>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>
