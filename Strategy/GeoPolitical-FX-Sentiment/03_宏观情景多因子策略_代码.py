@@ -2,7 +2,7 @@
 宏观情景驱动多因子高频策略实现
 Macro Regime-Driven Multi-Factor HF Strategy for FX & Precious Metals
 
-与 03_strategy_implementation.py（NSIF 驱动）完全不同的架构：
+与 02_NSIF舆情驱动策略_代码.py（NSIF 驱动）完全不同的架构：
   - 四因子信号矩阵（NSI + Lead-Lag + Regime + BoJ Tracker）
   - LLM 做宏观情景研判而非逐条新闻情感提取
   - 状态机驱动的仓位管理
