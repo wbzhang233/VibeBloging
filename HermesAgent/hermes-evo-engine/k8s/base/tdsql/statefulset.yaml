@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tdsql
+  namespace: hermes-evo
+  labels:
+    app: tdsql
+spec:
+  serviceName: tdsql-svc
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tdsql
+  template:
+    metadata:
+      labels:
+        app: tdsql
+    spec:
+      containers:
+        - name: tdsql
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-secrets
+                  key: TDSQL_ROOT_PASSWORD
+                  optional: true
+            - name: MYSQL_USER
+              value: hermes
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-secrets
+                  key: TDSQL_PASSWORD
+                  optional: true
+            - name: MYSQL_DATABASE
+              value: hermes_evo
+          args:
+            - "--default-authentication-plugin=mysql_native_password"
+            - "--character-set-server=utf8mb4"
+            - "--collation-server=utf8mb4_unicode_ci"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: tdsql-data
+              mountPath: /var/lib/mysql
+          livenessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "localhost", "-u", "hermes", "-phermes"]
+            initialDelaySeconds: 15
+            periodSeconds: 20
+  volumeClaimTemplates:
+    - metadata:
+        name: tdsql-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi

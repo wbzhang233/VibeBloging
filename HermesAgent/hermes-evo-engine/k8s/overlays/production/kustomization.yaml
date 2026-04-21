@@ -1,0 +1,39 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: hermes-evo
+
+resources:
+  - ../../base
+  - multi-cluster.yaml
+
+# Production: 完整资源，PDB，亲和性
+patches:
+  - target:
+      kind: Deployment
+      name: api-gateway
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      kind: Deployment
+      name: worker-agents
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 5
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: worker-agents-hpa
+    patch: |
+      - op: replace
+        path: /spec/maxReplicas
+        value: 50
+
+# ConfigMap 覆盖
+configMapGenerator:
+  - name: hermes-config
+    behavior: merge
+    literals:
+      - HERMES_LOG_LEVEL=WARNING
+      - HERMES_AGENT_POOL_SIZE=10

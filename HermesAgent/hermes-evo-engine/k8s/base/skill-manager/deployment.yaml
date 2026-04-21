@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skill-manager
+  namespace: hermes-evo
+  labels:
+    app: skill-manager
+spec:
+  replicas: 1  # 单例保证一致性
+  strategy:
+    type: Recreate  # 不允许同时运行两个实例
+  selector:
+    matchLabels:
+      app: skill-manager
+  template:
+    metadata:
+      labels:
+        app: skill-manager
+    spec:
+      containers:
+        - name: skill-manager
+          image: hermes-evo-engine:latest
+          command: ["uvicorn", "hermes_evo.api.app:app", "--host", "0.0.0.0", "--port", "8001"]
+          ports:
+            - containerPort: 8001
+          envFrom:
+            - configMapRef:
+                name: hermes-config
+            - secretRef:
+                name: hermes-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: skill-data
+              mountPath: /data/skill_store
+      volumes:
+        - name: skill-data
+          persistentVolumeClaim:
+            claimName: skill-store-pvc

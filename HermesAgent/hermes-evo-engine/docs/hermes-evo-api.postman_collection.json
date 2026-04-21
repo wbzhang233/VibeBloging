@@ -1,0 +1,348 @@
+{
+	"info": {
+		"_postman_id": "hermes-evo-engine-api-collection",
+		"name": "Hermes Evo Engine API",
+		"description": "HermesAgent 自进化引擎 REST API 完整接口集合。\n\n基于 AgentScope 的自进化智能体系统 — 实现 Skill 自学习、热补丁自修复与条件激活。\n\n核心机制：双引擎学习（前台自觉 + 后台巡检）\n\n## 模块说明\n\n- **Skills** — Skill CRUD + 热补丁管理\n- **Agents** — Agent 任务异步执行与状态查询\n- **Review** — 后台巡检触发与历史查询\n- **Metrics** — 系统全局指标\n\n## 使用方式\n\n1. 导入本集合到 Postman\n2. 确认 `base_url` 变量指向正确的服务地址（默认 `http://localhost:8000`）\n3. 先调用 Health Check 确认服务可用",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Health Check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/health",
+					"host": ["{{base_url}}"],
+					"path": ["health"]
+				},
+				"description": "健康检查端点。返回服务状态和版本号，用于确认服务是否正常运行。"
+			},
+			"response": []
+		},
+		{
+			"name": "Skills",
+			"description": "Skill CRUD + 热补丁 REST API。\n\n支持创建、查询、列表、热补丁修复和软删除（deprecated）操作。",
+			"item": [
+				{
+					"name": "创建 Skill",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"name\": \"data-analyzer\",\n\t\"description\": \"分析结构化数据并生成摘要报告\",\n\t\"content\": \"## Task\\n分析输入数据，提取关键指标，生成结构化摘要。\\n\\n## Steps\\n1. 解析输入数据格式\\n2. 计算统计指标\\n3. 生成摘要报告\",\n\t\"tags\": [\"analysis\", \"data\"],\n\t\"fallback_for_toolsets\": [],\n\t\"requires_tools\": [\"python\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/skills",
+							"host": ["{{base_url}}"],
+							"path": ["skills"]
+						},
+						"description": "创建新 Skill。\n\n**请求字段说明：**\n- `name` (string, 必填) — Skill 名称\n- `description` (string, 必填) — Skill 功能描述\n- `content` (string, 必填) — Skill 内容（Markdown 格式）\n- `tags` (string[], 可选) — 标签列表，默认空\n- `fallback_for_toolsets` (string[], 可选) — 作为哪些工具集的 fallback\n- `requires_tools` (string[], 可选) — 依赖的工具列表\n\n**返回：** 201 Created + SkillResponse"
+					},
+					"response": []
+				},
+				{
+					"name": "列出 Skills（支持过滤）",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/skills",
+							"host": ["{{base_url}}"],
+							"path": ["skills"],
+							"query": [
+								{
+									"key": "status",
+									"value": "active",
+									"description": "按状态过滤（如 active, deprecated）",
+									"disabled": true
+								},
+								{
+									"key": "tag",
+									"value": "analysis",
+									"description": "按标签过滤",
+									"disabled": true
+								},
+								{
+									"key": "safety_level",
+									"value": "safe",
+									"description": "按安全等级过滤",
+									"disabled": true
+								},
+								{
+									"key": "q",
+									"value": "data",
+									"description": "关键词搜索",
+									"disabled": true
+								}
+							]
+						},
+						"description": "列出所有 Skill，支持多种过滤条件。\n\n**查询参数（均可选）：**\n- `status` — 按状态过滤（如 active, deprecated）\n- `tag` — 按标签过滤\n- `safety_level` — 按安全等级过滤\n- `q` — 关键词搜索\n\n**返回：** SkillListResponse（包含 total 和 skills 数组）"
+					},
+					"response": []
+				},
+				{
+					"name": "获取 Skill 详情",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/skills/:skill_id",
+							"host": ["{{base_url}}"],
+							"path": ["skills", ":skill_id"],
+							"variable": [
+								{
+									"key": "skill_id",
+									"value": "skill-001",
+									"description": "Skill 唯一标识符"
+								}
+							]
+						},
+						"description": "获取指定 Skill 的完整详情。\n\n**路径参数：**\n- `skill_id` (string) — Skill 唯一标识符\n\n**返回：** SkillResponse\n\n**错误：** 404 — Skill 不存在"
+					},
+					"response": []
+				},
+				{
+					"name": "热补丁修复 Skill",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"old_string\": \"计算统计指标\",\n\t\"new_string\": \"计算统计指标（含中位数和标准差）\",\n\t\"reason\": \"补充统计指标的具体说明，提升 Skill 精确度\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/skills/:skill_id",
+							"host": ["{{base_url}}"],
+							"path": ["skills", ":skill_id"],
+							"variable": [
+								{
+									"key": "skill_id",
+									"value": "skill-001",
+									"description": "Skill 唯一标识符"
+								}
+							]
+						},
+						"description": "热补丁 — 就地修复 Skill 内容，无需重建。\n\n通过字符串替换的方式修改 Skill 内容，类似 sed 操作。每次补丁会递增版本号并记录补丁历史。\n\n**请求字段说明：**\n- `old_string` (string, 必填) — 要替换的原始文本\n- `new_string` (string, 必填) — 替换后的新文本\n- `reason` (string, 可选) — 修改原因，默认空字符串\n\n**错误：**\n- 400 — old_string 未找到（PatchTargetNotFoundError）\n- 400 — old_string 匹配多处（AmbiguousPatchError）\n- 404 — Skill 不存在"
+					},
+					"response": []
+				},
+				{
+					"name": "软删除 Skill（deprecated）",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/skills/:skill_id",
+							"host": ["{{base_url}}"],
+							"path": ["skills", ":skill_id"],
+							"variable": [
+								{
+									"key": "skill_id",
+									"value": "skill-001",
+									"description": "Skill 唯一标识符"
+								}
+							]
+						},
+						"description": "软删除 — 将 Skill 标记为 deprecated（保留历史记录，不物理删除）。\n\n**路径参数：**\n- `skill_id` (string) — Skill 唯一标识符\n\n**返回：** SkillResponse（status 变为 deprecated）\n\n**错误：** 404 — Skill 不存在"
+					},
+					"response": []
+				},
+				{
+					"name": "获取 Skill 补丁历史",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/skills/:skill_id/patches",
+							"host": ["{{base_url}}"],
+							"path": ["skills", ":skill_id", "patches"],
+							"variable": [
+								{
+									"key": "skill_id",
+									"value": "skill-001",
+									"description": "Skill 唯一标识符"
+								}
+							]
+						},
+						"description": "获取指定 Skill 的完整补丁历史记录。\n\n**路径参数：**\n- `skill_id` (string) — Skill 唯一标识符\n\n**返回：** 包含 skill_id, name, version 和 patches 数组的对象\n\n**错误：** 404 — Skill 不存在"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Agents",
+			"description": "Agent 任务执行与状态查询。\n\n支持提交异步任务、查询 Agent 池状态和获取任务执行结果。",
+			"item": [
+				{
+					"name": "提交 Agent 任务",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"instruction\": \"分析最近一周的市场新闻，提取黄金相关的情绪因子\",\n\t\"context\": {\n\t\t\"asset\": \"XAUUSD\",\n\t\t\"timeframe\": \"1W\",\n\t\t\"source\": \"reuters\"\n\t},\n\t\"max_iters\": 10\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/agents/execute",
+							"host": ["{{base_url}}"],
+							"path": ["agents", "execute"]
+						},
+						"description": "提交 Agent 任务（异步执行）。\n\n任务会被分配到 Agent 池中的空闲 Agent 异步执行，立即返回 task_id。\n\n**请求字段说明：**\n- `instruction` (string, 必填) — 任务指令\n- `context` (object, 可选) — 任务上下文信息，默认空对象\n- `max_iters` (int | null, 可选) — 最大迭代次数\n\n**返回：** 202 Accepted + AgentExecuteResponse（包含 task_id 和 status）"
+					},
+					"response": []
+				},
+				{
+					"name": "获取 Agent 池状态",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/agents/status",
+							"host": ["{{base_url}}"],
+							"path": ["agents", "status"]
+						},
+						"description": "获取 Agent 池当前状态。\n\n**返回：** PoolStatusResponse\n- `pool_size` (int) — 池大小\n- `active_tasks` (int) — 当前活跃任务数\n- `total_submitted` (int) — 累计提交任务数\n- `total_completed` (int) — 累计完成任务数\n- `agents` (array) — 各 Agent 详细状态"
+					},
+					"response": []
+				},
+				{
+					"name": "获取任务执行结果",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/agents/tasks/:task_id",
+							"host": ["{{base_url}}"],
+							"path": ["agents", "tasks", ":task_id"],
+							"variable": [
+								{
+									"key": "task_id",
+									"value": "task-abc-123",
+									"description": "任务唯一标识符（由 /agents/execute 返回）"
+								}
+							]
+						},
+						"description": "获取指定任务的执行结果。\n\n**路径参数：**\n- `task_id` (string) — 任务唯一标识符（由 POST /agents/execute 返回）\n\n**返回：** TaskResultResponse\n- `task_id` — 任务 ID\n- `agent_id` — 执行该任务的 Agent ID\n- `success` — 是否成功\n- `result` — 执行结果文本\n- `tool_call_count` — 工具调用次数\n- `skills_created` — 本次创建的 Skill 列表\n- `skills_patched` — 本次修补的 Skill 列表\n- `started_at` / `completed_at` — 时间戳\n\n**错误：** 404 — 任务不存在或仍在执行中"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Review",
+			"description": "后台巡检触发与历史查询。\n\n双引擎学习系统的后台巡检部分，支持手动触发巡检和查看巡检历史。",
+			"item": [
+				{
+					"name": "手动触发巡检",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"agent_id\": \"agent-001\",\n\t\"conversation_history\": [\n\t\t{\n\t\t\t\"role\": \"user\",\n\t\t\t\"content\": \"请分析 XAUUSD 最近的走势\"\n\t\t},\n\t\t{\n\t\t\t\"role\": \"assistant\",\n\t\t\t\"content\": \"根据分析，黄金目前处于震荡区间...\"\n\t\t}\n\t]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/review/trigger",
+							"host": ["{{base_url}}"],
+							"path": ["review", "trigger"]
+						},
+						"description": "手动触发后台巡检（忽略自动触发的阈值条件）。\n\n巡检引擎会分析对话历史，判断是否有值得提取为 Skill 的模式或需要修复的问题。\n\n**请求字段说明：**\n- `agent_id` (string, 必填) — 关联的 Agent ID\n- `conversation_history` (array, 可选) — 对话历史（role/content 对象数组），默认空\n\n**返回：** ReviewResponse\n- `review_id` — 巡检 ID\n- `timestamp` — 巡检时间\n- `candidates_count` — 发现的候选 Skill 数量\n- `nothing_to_save` — 是否无可提取内容\n- `reasoning` — 巡检引擎的推理说明"
+					},
+					"response": []
+				},
+				{
+					"name": "获取巡检历史",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/review/history",
+							"host": ["{{base_url}}"],
+							"path": ["review", "history"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "20",
+									"description": "返回最近 N 条巡检记录（默认 20）",
+									"disabled": true
+								}
+							]
+						},
+						"description": "获取巡检历史记录。\n\n**查询参数：**\n- `limit` (int, 可选) — 返回最近 N 条记录，默认 20\n\n**返回：** 包含 total 和 reviews 数组的对象\n\n注意：当前巡检历史保存在内存中，服务重启后会清空。生产环境应持久化到数据库。"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Metrics",
+			"description": "系统全局指标查询。\n\n聚合展示 Skill 和 Agent 池的运行统计。",
+			"item": [
+				{
+					"name": "获取系统指标",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/metrics",
+							"host": ["{{base_url}}"],
+							"path": ["metrics"]
+						},
+						"description": "获取系统全局指标。\n\n**返回：** MetricsResponse\n- `total_skills` (int) — Skill 总数\n- `skills_by_status` (object) — 按状态分组的 Skill 计数（如 {\"active\": 5, \"deprecated\": 2}）\n- `skills_by_safety` (object) — 按安全等级分组的 Skill 计数\n- `skills_by_creator` (object) — 按创建者分组的 Skill 计数（如 {\"manual\": 3, \"auto\": 7}）\n- `pool_info` (object) — Agent 池信息（pool_size, active_tasks, total_submitted, total_completed）"
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

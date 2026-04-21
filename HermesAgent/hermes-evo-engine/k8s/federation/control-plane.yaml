@@ -1,0 +1,32 @@
+# 多集群联邦 — 控制面配置
+#
+# 架构：
+#   Control Plane Cluster              Worker Cluster(s)
+#   ┌───────────────────┐              ┌─────────────────┐
+#   │ API Gateway (HPA) │              │ Worker Agent xN  │
+#   │ Skill Manager     │<────────────>│ (连接控制面      │
+#   │ Review Agent      │  Submariner   │  Redis + Skill   │
+#   │ TDSQL (MySQL)     │  ServiceExport│  Manager)        │
+#   │ Redis             │              │                  │
+#   └───────────────────┘              └─────────────────┘
+#
+# 使用 Submariner 实现跨集群 Service 发现
+# 控制面导出 Redis 和 Skill Manager 服务
+
+apiVersion: multicluster.x-k8s.io/v1alpha1
+kind: ServiceExport
+metadata:
+  name: redis-svc
+  namespace: hermes-evo
+---
+apiVersion: multicluster.x-k8s.io/v1alpha1
+kind: ServiceExport
+metadata:
+  name: skill-manager-svc
+  namespace: hermes-evo
+---
+apiVersion: multicluster.x-k8s.io/v1alpha1
+kind: ServiceExport
+metadata:
+  name: tdsql-svc
+  namespace: hermes-evo

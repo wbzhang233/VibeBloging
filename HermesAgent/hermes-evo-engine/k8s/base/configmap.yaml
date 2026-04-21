@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hermes-config
+  namespace: hermes-evo
+data:
+  # 双引擎参数
+  HERMES_REVIEW_THRESHOLD: "10"
+  HERMES_MAX_AGENT_ITERS: "20"
+  HERMES_AGENT_POOL_SIZE: "5"
+  # LLM
+  HERMES_MODEL_NAME: "qwen-max"
+  # 安全
+  HERMES_SAFETY_SCAN_ENABLED: "true"
+  # 日志
+  HERMES_LOG_LEVEL: "INFO"
+  HERMES_DEBUG: "false"
+  # Skill 存储
+  HERMES_SKILL_STORE_PATH: "/data/skill_store"

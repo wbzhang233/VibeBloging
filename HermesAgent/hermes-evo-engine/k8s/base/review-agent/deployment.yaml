@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: review-agent
+  namespace: hermes-evo
+  labels:
+    app: review-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: review-agent
+  template:
+    metadata:
+      labels:
+        app: review-agent
+    spec:
+      containers:
+        - name: review-agent
+          image: hermes-evo-engine:latest
+          command: ["uvicorn", "hermes_evo.api.app:app", "--host", "0.0.0.0", "--port", "8002"]
+          ports:
+            - containerPort: 8002
+          envFrom:
+            - configMapRef:
+                name: hermes-config
+            - secretRef:
+                name: hermes-secrets
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"

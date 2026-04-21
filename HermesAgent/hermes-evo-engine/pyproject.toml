@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-evo-engine"
+version = "0.1.0"
+description = "HermesAgent Self-Evolution Engine — Skill 自学习、热补丁自修复与条件激活"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+dependencies = [
+    # Agent 框架
+    "agentscope>=0.1.0",
+    # Web 框架
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    # 数据库 (TDSQL / MySQL 兼容)
+    "sqlalchemy[asyncio]>=2.0",
+    "aiomysql>=0.2.0",
+    "alembic>=1.14.0",
+    # 缓存/队列
+    "redis[hiredis]>=5.2.0",
+    # 数据验证
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    # 工具
+    "python-dotenv>=1.0.0",
+    "structlog>=24.4.0",
+    "httpx>=0.28.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "PL"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true

@@ -1,0 +1,24 @@
+# 多集群 PodDisruptionBudget — 生产环境保护
+# 确保升级/维护时至少有 N-1 个副本可用
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-gateway-pdb
+  namespace: hermes-evo
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: worker-agents-pdb
+  namespace: hermes-evo
+spec:
+  maxUnavailable: 2
+  selector:
+    matchLabels:
+      app: worker-agents

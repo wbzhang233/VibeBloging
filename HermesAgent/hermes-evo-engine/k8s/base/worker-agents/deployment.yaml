@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-agents
+  namespace: hermes-evo
+  labels:
+    app: worker-agents
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: worker-agents
+  template:
+    metadata:
+      labels:
+        app: worker-agents
+    spec:
+      containers:
+        - name: worker
+          image: hermes-evo-engine:latest
+          command: ["uvicorn", "hermes_evo.api.app:app", "--host", "0.0.0.0", "--port", "8003"]
+          ports:
+            - containerPort: 8003
+          envFrom:
+            - configMapRef:
+                name: hermes-config
+            - secretRef:
+                name: hermes-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: skill-data
+              mountPath: /data/skill_store
+              readOnly: true
+      volumes:
+        - name: skill-data
+          persistentVolumeClaim:
+            claimName: skill-store-pvc

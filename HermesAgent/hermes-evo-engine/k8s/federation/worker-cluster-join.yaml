@@ -1,0 +1,85 @@
+# Worker 集群加入模板
+#
+# 每个 Worker 集群只部署 Worker Agent Pods，
+# 通过 Submariner ServiceImport 连接控制面的 Redis 和 Skill Manager。
+#
+# 部署步骤：
+# 1. 安装 Submariner broker（控制面集群）
+# 2. 在 Worker 集群执行 subctl join
+# 3. 应用此清单
+
+apiVersion: multicluster.x-k8s.io/v1alpha1
+kind: ServiceImport
+metadata:
+  name: redis-svc
+  namespace: hermes-evo
+spec:
+  type: ClusterSetIP
+  ports:
+    - port: 6379
+      protocol: TCP
+---
+apiVersion: multicluster.x-k8s.io/v1alpha1
+kind: ServiceImport
+metadata:
+  name: skill-manager-svc
+  namespace: hermes-evo
+spec:
+  type: ClusterSetIP
+  ports:
+    - port: 8001
+      protocol: TCP
+---
+apiVersion: multicluster.x-k8s.io/v1alpha1
+kind: ServiceImport
+metadata:
+  name: tdsql-svc
+  namespace: hermes-evo
+spec:
+  type: ClusterSetIP
+  ports:
+    - port: 3306
+      protocol: TCP
+---
+# Worker Agents Deployment（仅 Worker 集群部署）
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-agents
+  namespace: hermes-evo
+  labels:
+    app: worker-agents
+    cluster-role: worker
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: worker-agents
+  template:
+    metadata:
+      labels:
+        app: worker-agents
+        cluster-role: worker
+    spec:
+      containers:
+        - name: worker
+          image: hermes-evo-engine:latest
+          command: ["uvicorn", "hermes_evo.api.app:app", "--host", "0.0.0.0", "--port", "8003"]
+          ports:
+            - containerPort: 8003
+          env:
+            # 连接控制面服务（通过 Submariner DNS）
+            - name: HERMES_DATABASE_URL
+              value: "mysql+aiomysql://hermes:hermes@tdsql-svc.hermes-evo.svc.clusterset.local:3306/hermes_evo"
+            - name: HERMES_REDIS_URL
+              value: "redis://redis-svc.hermes-evo.svc.clusterset.local:6379/0"
+          envFrom:
+            - configMapRef:
+                name: hermes-config
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

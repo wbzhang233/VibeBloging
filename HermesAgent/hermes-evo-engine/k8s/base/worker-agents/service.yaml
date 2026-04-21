@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: worker-agents-svc
+  namespace: hermes-evo
+spec:
+  selector:
+    app: worker-agents
+  ports:
+    - port: 8003
+      targetPort: 8003
+      protocol: TCP
+  clusterIP: None  # Headless service for internal discovery

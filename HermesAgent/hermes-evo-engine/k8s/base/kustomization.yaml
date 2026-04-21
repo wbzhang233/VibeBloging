@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: hermes-evo
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  # 基础设施 (TDSQL / MySQL 兼容)
+  - tdsql/statefulset.yaml
+  - tdsql/service.yaml
+  - tdsql/pvc.yaml
+  - redis/deployment.yaml
+  - redis/service.yaml
+  # 应用组件
+  - api-gateway/deployment.yaml
+  - api-gateway/service.yaml
+  - api-gateway/hpa.yaml
+  - skill-manager/deployment.yaml
+  - skill-manager/service.yaml
+  - skill-manager/pvc.yaml
+  - review-agent/deployment.yaml
+  - review-agent/service.yaml
+  - worker-agents/deployment.yaml
+  - worker-agents/service.yaml
+  - worker-agents/hpa.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: hermes-evo-engine
